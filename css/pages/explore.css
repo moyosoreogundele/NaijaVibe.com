@@ -1,0 +1,23 @@
+.explore-hero{padding:34px var(--gutter);background:var(--green-tint)}
+.states-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:20px var(--gutter)}
+.state-card .pic{height:84px}
+.region-filter{padding:0 var(--gutter)}
+.state-hero{height:280px;background:linear-gradient(135deg,#175b36,#8fc79a);background-size:cover;background-position:center;position:relative;color:#fff;display:flex;align-items:flex-end}
+.state-hero::before{content:"";position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.65),transparent 70%)}
+.state-hero>div{position:relative;padding:24px var(--gutter)}
+.state-hero h1{color:#fff;font-size:38px}
+.state-hero .photo-credit{position:relative;right:auto;bottom:auto;width:max-content;max-width:100%;margin-top:8px}
+.state-content{padding-top:20px;padding-bottom:30px}
+.state-culture-grid,.state-updates-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.state-culture-grid{margin-top:18px}
+.state-culture-card{padding:16px}
+.state-culture-card h2,.state-updates-grid h3{font-size:16px;margin-bottom:8px}
+.state-culture-card ul{padding-left:20px;color:var(--muted);font-size:13px}
+.state-culture-card p{font-size:13px;line-height:1.6;color:var(--muted)}
+.state-updates{margin-top:24px}
+.state-updates .section-title{margin-bottom:4px}
+.state-updates-grid>section{min-width:0}
+.state-news-panel{padding:12px}
+.state-updates-grid .news-list{display:grid;grid-template-columns:1fr;gap:10px}
+.state-popular{margin-top:24px}
+@media(max-width:680px){.state-culture-grid,.state-updates-grid{grid-template-columns:1fr}}

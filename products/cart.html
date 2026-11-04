@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cart · NaijaVibe</title>
+<meta name="description" content="Discover the real Nigeria: people, culture, food, places and stories.">
+<meta name="theme-color" content="#0b8f3e">
+<link rel="manifest" href="../manifest.json">
+<link rel="icon" href="../assets/logos/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../css/variables.css">
+<link rel="stylesheet" href="../css/reset.css">
+<link rel="stylesheet" href="../css/global.css">
+<link rel="stylesheet" href="../css/layout.css">
+<link rel="stylesheet" href="../css/components.css">
+<link rel="stylesheet" href="../css/forms.css">
+<link rel="stylesheet" href="../css/pages/marketplace.css">
+<link rel="stylesheet" href="../css/animations.css">
+<link rel="stylesheet" href="../css/responsive.css">
+</head>
+<body data-root="../" data-page="cart" data-nav="marketplace">
+<div class="page">
+<div id="site-header"></div>
+<div class="container" style="max-width:800px;margin-top:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h1 style="margin:0;font-size:26px">Your Shopping Cart</h1>
+    <a href="../marketplace.html" class="btn btn-outline btn-sm">← Continue shopping</a>
+  </div>
+
+  <div class="card" style="padding:20px;margin-bottom:20px">
+    <div id="cart"></div>
+    <div style="border-top:1px solid var(--border, #eee);margin-top:20px;padding-top:16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <button class="btn btn-outline btn-sm" id="clear-cart-btn" type="button">Clear cart</button>
+      <div style="text-align:right">
+        <p style="margin:0 0 8px;font-size:20px"><b>Total: <span id="total" style="color:var(--green-dark)">₦0</span></b></p>
+        <button class="btn btn-primary" id="checkout" type="button" style="padding:10px 24px;font-size:15px">Proceed to Checkout →</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="checkout-panel" class="card" style="padding:24px;margin-bottom:30px;display:none">
+    <h2 style="font-size:20px;margin-bottom:4px">Checkout & Delivery Details</h2>
+    <p class="muted" style="font-size:13px;margin-bottom:20px">Items will be dispatched from verified Nigerian sellers.</p>
+    <form id="checkout-form">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div class="field">
+          <label for="c-name" style="font-weight:600;font-size:13px;display:block;margin-bottom:4px">Full name *</label>
+          <input id="c-name" name="name" class="input" placeholder="e.g. Babatunde Okafor" required>
+        </div>
+        <div class="field">
+          <label for="c-phone" style="font-weight:600;font-size:13px;display:block;margin-bottom:4px">Phone number *</label>
+          <input id="c-phone" name="phone" class="input" placeholder="080 1234 5678" required>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div class="field">
+          <label for="c-email" style="font-weight:600;font-size:13px;display:block;margin-bottom:4px">Email address *</label>
+          <input id="c-email" name="email" type="email" class="input" placeholder="yourname@gmail.com" required>
+        </div>
+        <div class="field">
+          <label for="c-state" style="font-weight:600;font-size:13px;display:block;margin-bottom:4px">Delivery State *</label>
+          <select id="c-state" name="state" class="input" required></select>
+        </div>
+      </div>
+      <div class="field" style="margin-bottom:16px">
+        <label for="c-address" style="font-weight:600;font-size:13px;display:block;margin-bottom:4px">Street address & Landmark *</label>
+        <textarea id="c-address" name="address" class="textarea" rows="2" placeholder="e.g. 15 Admiralty Way, Lekki Phase 1, Lagos" required></textarea>
+      </div>
+      <div class="field" style="margin-bottom:20px">
+        <label style="font-weight:600;font-size:13px;display:block;margin-bottom:8px">Payment method *</label>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:10px">
+          <label style="border:1px solid var(--border, #ccc);border-radius:8px;padding:12px;cursor:pointer;display:flex;align-items:center;gap:8px">
+            <input type="radio" name="payment_method" value="Pay on Delivery" checked>
+            <span><b>Pay on Delivery</b><br><small class="muted">Cash or transfer at door</small></span>
+          </label>
+          <label style="border:1px solid var(--border, #ccc);border-radius:8px;padding:12px;cursor:pointer;display:flex;align-items:center;gap:8px">
+            <input type="radio" name="payment_method" value="Bank Transfer">
+            <span><b>Bank Transfer</b><br><small class="muted">Direct to Nigerian account</small></span>
+          </label>
+          <label style="border:1px solid var(--border, #ccc);border-radius:8px;padding:12px;cursor:pointer;display:flex;align-items:center;gap:8px">
+            <input type="radio" name="payment_method" value="Debit Card">
+            <span><b>Debit Card</b><br><small class="muted">Verve, Mastercard, Visa</small></span>
+          </label>
+        </div>
+      </div>
+      <div id="bank-transfer-info" class="card" style="padding:14px;background:rgba(11,143,62,0.06);border:1px dashed var(--green-dark);margin-bottom:18px;display:none">
+        <p style="margin:0 0 4px"><b>NaijaVibe Escrow Account:</b></p>
+        <p style="margin:0;font-size:13px">Bank: <b>Providus Bank</b> · Account: <b>5401928374</b> · Name: <b>NaijaVibe Market Escrow</b></p>
+        <small class="muted">Transfer will be confirmed automatically upon order submission.</small>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <button class="btn btn-primary" type="submit" id="place-order-btn" style="padding:12px 28px;font-size:16px">Confirm & Place Order</button>
+        <button class="btn btn-outline" type="button" id="cancel-checkout-btn">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <div id="order-success-panel" class="card" style="padding:32px;text-align:center;display:none;border-top:4px solid var(--green-dark)">
+    <div style="font-size:48px;line-height:1;margin-bottom:12px">🎉</div>
+    <h2 style="font-size:24px;color:var(--green-dark);margin-bottom:6px">Order Confirmed!</h2>
+    <p style="font-size:16px;margin-bottom:16px">Thank you for supporting Nigerian businesses on NaijaVibe.</p>
+    <div style="background:var(--bg-card, #f9f9f9);border-radius:12px;padding:16px;max-width:440px;margin:0 auto 24px;text-align:left">
+      <p style="margin:0 0 6px">Order Number: <b id="success-order-num" style="color:var(--green-dark)"></b></p>
+      <p style="margin:0 0 6px">Total Paid: <b id="success-order-total"></b></p>
+      <p style="margin:0 0 6px">Payment: <span id="success-order-payment"></span></p>
+      <p style="margin:0">Delivery: <span id="success-order-address"></span></p>
+    </div>
+    <a href="../marketplace.html" class="btn btn-primary">Return to Marketplace</a>
+  </div>
+</div>
+<div id="site-footer"></div>
+</div>
+<script src="../js/config.js"></script>
+<script src="../states/state-data.js"></script>
+<script src="../js/utils.js"></script>
+<script src="../js/theme.js"></script>
+<script src="../js/services/auth.service.js"></script>
+<script src="../js/services/profile.service.js"></script>
+<script src="../js/services/posts.service.js"></script>
+<script src="../js/services/comments.service.js"></script>
+<script src="../js/services/follows.service.js"></script>
+<script src="../js/services/uploads.service.js"></script>
+<script src="../js/services/events.service.js"></script>
+<script src="../js/services/businesses.service.js"></script>
+<script src="../js/services/products.service.js"></script>
+<script src="../js/services/reports.service.js"></script>
+<script src="../js/validation.js"></script>
+<script src="../js/router.js"></script>
+<script src="../js/navigation.js"></script>
+<script src="../js/search.js"></script>
+<script src="../js/notifications.js"></script>
+<script src="../js/components/toast.js"></script>
+<script src="../js/components/modal.js"></script>
+<script src="../js/components/header.js"></script>
+<script src="../js/components/mobile-nav.js"></script>
+<script src="../js/components/sidebar.js"></script>
+<script src="../js/components/post-card.js"></script>
+<script src="../js/components/video-card.js"></script>
+<script src="../js/components/state-card.js"></script>
+<script src="../js/components/event-card.js"></script>
+<script src="../js/components/business-card.js"></script>
+<script src="../js/pages/marketplace.js"></script>
+<script src="../js/app.js"></script>
+</body>
+</html>

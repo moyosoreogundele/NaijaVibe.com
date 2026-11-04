@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marketplace · NaijaVibe</title>
+<meta name="description" content="Discover the real Nigeria: people, culture, food, places and stories.">
+<meta name="theme-color" content="#0b8f3e">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="assets/logos/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/variables.css">
+<link rel="stylesheet" href="css/reset.css">
+<link rel="stylesheet" href="css/global.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/forms.css">
+<link rel="stylesheet" href="css/pages/marketplace.css">
+<link rel="stylesheet" href="css/animations.css">
+<link rel="stylesheet" href="css/responsive.css">
+</head>
+<body data-root="" data-page="marketplace" data-nav="marketplace">
+<div class="page">
+<div id="site-header"></div>
+<div class="page-head" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px">
+  <div>
+    <h1>Marketplace</h1>
+    <p>Shop authentic items. Support creators and businesses across Nigeria.</p>
+  </div>
+  <div style="display:flex;gap:10px">
+    <button class="btn btn-primary" id="open-sell-modal" type="button"><i data-i="plus"></i> Sell an item</button>
+    <a class="btn btn-outline" href="products/cart.html" id="cart-badge-btn"><i data-i="cart"></i> Cart <span id="cart-count-badge" class="badge" style="background:var(--green-dark);color:#fff;border-radius:10px;padding:2px 7px;font-size:11px;margin-left:4px">0</span></a>
+  </div>
+</div>
+
+<div class="container" style="margin-bottom:20px">
+  <div class="card" style="padding:14px;display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+    <div style="flex:1;min-width:220px">
+      <input type="search" id="market-search" class="input" placeholder="Search crafts, jollof spices, adire, fashion..." style="margin:0">
+    </div>
+    <div style="min-width:160px">
+      <select id="market-category-filter" class="input" style="margin:0">
+        <option value="all">All Categories</option>
+        <option value="fashion">Fashion & Style</option>
+        <option value="food">Food & Spices</option>
+        <option value="culture">Art & Heritage</option>
+        <option value="events">Events & Passes</option>
+        <option value="travel">Travel & Crafts</option>
+      </select>
+    </div>
+    <div style="min-width:160px">
+      <select id="market-state-filter" class="input" style="margin:0">
+        <option value="all">All Nigerian States</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<div class="market-grid" id="market"></div>
+
+<dialog id="sell-dialog" class="live-start-dialog" style="max-width:520px;border-radius:16px;padding:24px;border:none;box-shadow:0 12px 40px rgba(0,0,0,0.25)">
+  <form id="sell-product-form">
+    <div class="live-dialog-heading" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div>
+        <span class="live-eyebrow" style="color:var(--green-dark);font-weight:700;font-size:12px">NAIJAVIBE MARKET</span>
+        <h2 style="font-size:20px;margin:2px 0 0">List an item for sale</h2>
+      </div>
+      <button id="close-sell-dialog" class="live-room-close" type="button" aria-label="Close" style="background:none;border:none;font-size:24px;cursor:pointer">×</button>
+    </div>
+    <div class="field" style="margin-bottom:12px">
+      <label for="prod-name" style="font-weight:600;font-size:13px;display:block;margin-bottom:4px">Product name *</label>
+      <input id="prod-name" name="name" class="input" placeholder="e.g. Handmade Lagos Adire Kimono" required maxlength="120">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="field">
+        <label for="prod-price" style="font-weight:600;font-size:13px;display:block;margin-bottom:4px">Price (₦ Naira) *</label>
+        <input id="prod-price" name="price" type="number" class="input" placeholder="e.g. 15000" min="100" required>
+      </div>
+      <div class="field">
+        <label for="prod-category" style="font-weight:600;font-size:13px;display:block;margin-bottom:4px">Category *</label>
+        <select id="prod-category" name="category" class="input" required>
+          <option value="fashion">Fashion & Style</option>
+          <option value="food">Food & Spices</option>
+          <option value="culture">Art & Heritage</option>
+          <option value="events">Events & Passes</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="field">
+        <label for="prod-state" style="font-weight:600;font-size:13px;display:block;margin-bottom:4px">State / Location *</label>
+        <select id="prod-state" name="state" class="input" required>
+          <option value="Lagos">Lagos</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="prod-stock" style="font-weight:600;font-size:13px;display:block;margin-bottom:4px">Available stock</label>
+        <input id="prod-stock" name="stock" type="number" class="input" value="20" min="1">
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:12px">
+      <label for="prod-description" style="font-weight:600;font-size:13px;display:block;margin-bottom:4px">Description</label>
+      <textarea id="prod-description" name="description" class="textarea" rows="3" placeholder="Tell buyers about materials, sizing, and origins..."></textarea>
+    </div>
+    <div class="field" style="margin-bottom:18px">
+      <label for="prod-image-file" style="font-weight:600;font-size:13px;display:block;margin-bottom:4px">Product photo</label>
+      <input id="prod-image-file" name="image" type="file" class="input" accept="image/*">
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" type="submit" id="submit-prod-btn" style="flex:1">Publish product</button>
+      <button class="btn btn-outline" type="button" id="cancel-sell-btn">Cancel</button>
+    </div>
+  </form>
+</dialog>
+<div id="site-footer"></div>
+</div>
+<script src="js/config.js"></script>
+<script src="states/state-data.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/services/auth.service.js"></script>
+<script src="js/services/profile.service.js"></script>
+<script src="js/services/posts.service.js"></script>
+<script src="js/services/comments.service.js"></script>
+<script src="js/services/follows.service.js"></script>
+<script src="js/services/uploads.service.js"></script>
+<script src="js/services/events.service.js"></script>
+<script src="js/services/businesses.service.js"></script>
+<script src="js/services/products.service.js"></script>
+<script src="js/services/reports.service.js"></script>
+<script src="js/validation.js"></script>
+<script src="js/router.js"></script>
+<script src="js/navigation.js"></script>
+<script src="js/search.js"></script>
+<script src="js/notifications.js"></script>
+<script src="js/components/toast.js"></script>
+<script src="js/components/modal.js"></script>
+<script src="js/components/header.js"></script>
+<script src="js/components/mobile-nav.js"></script>
+<script src="js/components/sidebar.js"></script>
+<script src="js/components/post-card.js"></script>
+<script src="js/components/video-card.js"></script>
+<script src="js/components/state-card.js"></script>
+<script src="js/components/event-card.js"></script>
+<script src="js/components/business-card.js"></script>
+<script src="js/pages/marketplace.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

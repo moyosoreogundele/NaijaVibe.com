@@ -1,0 +1,16 @@
+.feed{display:grid;gap:14px}
+.feed-post{padding:16px}
+.feed-post header{display:flex;gap:10px;align-items:center;margin-bottom:10px}
+.feed-post header b{display:block;font-size:13px;color:var(--ink)}.feed-post header small{color:var(--muted);font-size:11px}
+.feed-post .pic{border-radius:10px;margin:10px 0;width:100%;max-height:320px;object-fit:cover}
+.feed-post video.pic{background:#111}
+.feed-media{position:relative;min-height:150px;background:linear-gradient(135deg,#175b36,#8fc79a)}
+.feed-media .pic{min-height:150px;aspect-ratio:16/9}
+.feed-media .photo-credit{z-index:1}
+.feed-post .feed-video-tag{display:block;width:max-content;margin:0 0 8px}
+.feed-actions{display:flex;gap:18px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line);padding-top:10px;margin-top:6px}
+.feed-actions button{display:inline-flex;gap:6px;align-items:center;color:var(--muted)}
+.feed-actions button.on{color:#e53935}.feed-actions button:hover{color:var(--green)}
+.comment-box{display:flex;gap:8px;margin-top:10px}
+.comments{margin-top:10px;display:grid;gap:8px;font-size:12.5px}
+.comments p{background:var(--green-tint);padding:8px 12px;border-radius:10px}

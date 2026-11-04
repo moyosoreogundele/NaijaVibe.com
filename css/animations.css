@@ -1,0 +1,5 @@
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.toast{animation:pop .2s ease-out}
+.modal{animation:pop .2s ease-out}
+@keyframes fire{0%,100%{transform:scale(1) rotate(-2deg)}50%{transform:scale(1.07) rotate(2deg)}}
+.flame-anim{animation:fire 2.4s ease-in-out infinite;transform-origin:50% 90%}

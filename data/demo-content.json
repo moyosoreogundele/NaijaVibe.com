@@ -1,0 +1,207 @@
+{
+ "trending": [
+  {
+   "id": 1,
+   "cat": "food",
+   "title": "The Best Jollof Rice Spots in Lagos",
+   "views": "2.4k",
+   "likes": 342,
+   "place": "Lagos",
+   "image": "assets/images/trend-food.jpg"
+  },
+  {
+   "id": 2,
+   "cat": "travel",
+   "title": "Obudu Mountain Resort \u2013 A Hidden Gem",
+   "views": "1.8k",
+   "likes": 156,
+   "place": "Cross River",
+   "image": "assets/images/trend-travel.jpg"
+  },
+  {
+   "id": 3,
+   "cat": "music",
+   "title": "Asake's New Album Breaks Records",
+   "views": "3.2k",
+   "likes": 521,
+   "place": "Nigeria",
+   "image": "assets/images/trend-music.jpg"
+  },
+  {
+   "id": 4,
+   "cat": "events",
+   "title": "Calabar Carnival Celebrates Cross River Culture",
+   "views": "1.1k",
+   "likes": 203,
+   "place": "Cross River",
+   "image": "assets/images/trend-events.jpg"
+  },
+  {
+   "id": 5,
+   "cat": "culture",
+   "title": "Our Traditional Foods and Their Stories",
+   "views": "942",
+   "likes": 124,
+   "place": "Nigeria",
+   "image": "assets/images/trend-culture.jpg"
+  }
+ ],
+ "popular": [
+  {
+   "title": "The Beauty of Lekki Conservation Centre",
+   "user": "@travelwithtunde",
+   "views": "2.4k",
+   "likes": 342,
+   "image": "assets/images/post-1.jpg"
+  },
+  {
+   "title": "Best Nigerian Foods for your next trip",
+   "user": "@foodie_lagos",
+   "views": "1.8k",
+   "likes": 210,
+   "image": "assets/images/post-2.jpg"
+  },
+  {
+   "title": "Lagos nightlife hits different",
+   "user": "@naija_vibes",
+   "views": "1.5k",
+   "likes": 176,
+   "image": "assets/images/post-3.jpg"
+  },
+  {
+   "title": "Our culture is our pride #NaijaToTheWorld",
+   "user": "@culturequeen",
+   "views": "1.2k",
+   "likes": 98,
+   "image": "assets/images/post-4.jpg"
+  }
+ ],
+ "events": [],
+ "businesses": [
+  {
+   "id": 1,
+   "name": "Mama Put Kitchen",
+   "cat": "Food & Drinks",
+   "state": "Lagos",
+   "rating": 4.8,
+   "image": "assets/images/trend-food.jpg"
+  },
+  {
+   "id": 2,
+   "name": "Adire House",
+   "cat": "Fashion & Style",
+   "state": "Oyo",
+   "rating": 4.6,
+   "image": "assets/images/trend-culture.jpg"
+  },
+  {
+   "id": 3,
+   "name": "Obudu Escapes",
+   "cat": "Travel & Places",
+   "state": "Cross River",
+   "rating": 4.9,
+   "image": "assets/images/trend-travel.jpg"
+  },
+  {
+   "id": 4,
+   "name": "Afrobeat Live Studio",
+   "cat": "Music & Entertainment",
+   "state": "Lagos",
+   "rating": 4.5,
+   "image": "assets/images/trend-music.jpg"
+  }
+ ],
+ "products": [
+  {
+   "id": 1,
+   "name": "Hand-woven Aso Oke Set",
+   "price": 45000,
+   "image": "assets/images/trend-culture.jpg",
+   "seller": "Adire House"
+  },
+  {
+   "id": 2,
+   "name": "Jollof Spice Blend (500g)",
+   "price": 3500,
+   "image": "assets/images/trend-food.jpg",
+   "seller": "Mama Put Kitchen"
+  },
+  {
+   "id": 3,
+   "name": "Ankara Event Gown",
+   "price": 28000,
+   "image": "assets/images/post-4.jpg",
+   "seller": "Naija Styles"
+  },
+  {
+   "id": 4,
+   "name": "Carnival Day Pass",
+   "price": 12000,
+   "image": "assets/images/trend-events.jpg",
+   "seller": "Calabar Carnival"
+  }
+ ],
+ "posts": [
+  {
+   "id": 1,
+   "user": "@travelwithtunde",
+   "avatar": "assets/images/avatar-1.jpg",
+   "when": "2h ago",
+   "text": "Spent the morning at the Lekki Conservation Centre. The canopy walk is worth every step!",
+   "image": "assets/images/post-1.jpg",
+   "likes": 342,
+   "comments": [
+    "Adding this to my list!",
+    "The canopy walk is unreal."
+   ]
+  },
+  {
+   "id": 2,
+   "user": "@foodie_lagos",
+   "avatar": "assets/images/avatar-2.jpg",
+   "when": "5h ago",
+   "text": "Party jollof, smoky and perfect. Which Lagos spot is your pick?",
+   "image": "assets/images/post-2.jpg",
+   "likes": 210,
+   "comments": [
+    "Surulere hands down."
+   ]
+  },
+  {
+   "id": 3,
+   "user": "@naija_vibes",
+   "avatar": "assets/images/avatar-2.jpg",
+   "when": "1d ago",
+   "text": "Lagos nightlife hits different.",
+   "image": "assets/images/post-3.jpg",
+   "likes": 176,
+   "comments": []
+  }
+ ],
+ "notifications": [
+  {
+   "id": 1,
+   "text": "@travelwithtunde liked your post",
+   "when": "2m ago",
+   "unread": true
+  },
+  {
+   "id": 2,
+   "text": "Fresh event coverage from Lagos is available",
+   "when": "1h ago",
+   "unread": true
+  },
+  {
+   "id": 3,
+   "text": "@foodie_lagos started following you",
+   "when": "3h ago",
+   "unread": true
+  },
+  {
+   "id": 4,
+   "text": "Your business listing was approved",
+   "when": "1d ago",
+   "unread": false
+  }
+ ]
+}

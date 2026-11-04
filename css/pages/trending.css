@@ -1,0 +1,11 @@
+.trend-list{padding:20px var(--gutter);display:grid;gap:12px}
+.trend-item{display:flex;gap:16px;align-items:center;padding:12px}
+.trend-item .rank{font-size:30px;font-weight:700;color:var(--green);width:40px;text-align:center}
+.trend-photo{width:140px;height:90px;border-radius:10px;flex:none;position:relative;background:linear-gradient(135deg,#175b36,#8fc79a);background-size:cover;background-position:center}
+.trend-photo-link{position:absolute;inset:0}
+.trend-photo .photo-credit{z-index:1}
+.trend-grid{padding:20px var(--gutter)}
+.video-filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:0 var(--gutter)}
+.video-filters label{font-size:13px;font-weight:600}
+.video-filters .select{width:auto;min-width:170px}
+@media(max-width:560px){.video-filters{align-items:stretch}.video-filters .select,.video-filters .btn{flex:1}.short-video-feed{grid-template-columns:minmax(0,1fr)}.short-video-feed .video-card{width:min(100%,460px);margin-inline:auto}.video-card-player{aspect-ratio:9/16;max-height:70vh}}

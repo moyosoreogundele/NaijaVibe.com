@@ -1,0 +1,42 @@
+/* header */
+.site-header{background:var(--card);position:sticky;top:0;z-index:100}
+.top-bar{display:flex;align-items:center;gap:28px;padding:10px var(--gutter) 8px}
+.logo{display:flex;align-items:center;gap:8px;flex:none}
+.logo img{width:50px;height:40px}
+.logo b{display:block;font-size:22px;letter-spacing:.5px;color:var(--ink);font-weight:800;line-height:1}
+.logo small{display:block;font-size:9.5px;color:var(--muted);margin-top:3px;white-space:nowrap}
+.header-search{flex:0 1 505px;margin-left:40px;position:relative;display:flex;align-items:center;border:1px solid var(--line);border-radius:var(--radius-pill);background:var(--card);box-shadow:var(--shadow);padding:4px 5px 4px 16px;height:36px}
+.header-search .i{color:var(--muted)}
+.header-search input{flex:1;border:0;background:none;outline:0;padding:0 10px;font-size:12.5px;min-width:0}
+.header-search button{background:var(--green);color:#fff;border-radius:var(--radius-pill);width:42px;height:28px;display:grid;place-items:center}
+.header-actions{margin-left:auto;display:flex;align-items:center;gap:18px}
+.icon-btn{position:relative;width:34px;height:34px;display:grid;place-items:center;font-size:20px;color:var(--ink)}
+.icon-btn .badge{position:absolute;top:-2px;right:-3px;background:#e53935;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:15px;height:15px;display:grid;place-items:center}
+.header-actions .btn{padding:8px 0;width:86px;font-size:13px}
+.main-nav{display:flex;align-items:center;gap:6px;padding:4px var(--gutter) 8px;justify-content:space-between}
+.main-nav a{display:flex;align-items:center;gap:8px;padding:7px 18px;border-radius:var(--radius-pill);font-size:12.5px;font-weight:500;color:var(--ink);white-space:nowrap}
+.main-nav a .i{font-size:17px;color:var(--ink)}
+.main-nav a.active{background:var(--green);color:#fff;font-weight:600}.main-nav a.active .i{color:#fff}
+.main-nav a:hover:not(.active){background:var(--green-soft)}
+.more-wrap{position:relative}
+.more-menu{position:absolute;top:100%;right:0;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-lg);min-width:190px;padding:6px;display:none}
+.more-wrap.open .more-menu{display:block}
+.more-menu a{display:flex;border-radius:8px}
+.drawer{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:none}
+.drawer.open{display:block}
+.drawer-panel{position:absolute;right:0;top:0;bottom:0;width:300px;background:var(--card);padding:22px;display:flex;flex-direction:column;gap:4px;overflow:auto}
+.drawer-panel a{padding:10px 12px;border-radius:8px;display:flex;gap:10px;align-items:center;font-weight:500}
+.drawer-panel a:hover{background:var(--green-soft)}
+.drawer-panel hr{border:0;border-top:1px solid var(--line);margin:8px 0;width:100%}
+/* footer */
+.site-footer{background:var(--footer);color:#d9eadf;padding:20px var(--gutter) 14px;display:grid;grid-template-columns:1.1fr 1.7fr 1.1fr 1.7fr;gap:24px;font-size:10.5px;align-items:start;position:relative}
+.site-footer h4{color:#fff;font-size:10.5px;margin-bottom:7px;font-weight:600}
+.site-footer a{display:block;margin-bottom:3px;color:#cfe3d6}.site-footer a:hover{color:#fff}
+.site-footer .logo b{color:#fff;font-size:17px}.site-footer .logo img{width:30px;height:24px}
+.site-footer .logo small{color:#cfe3d6;font-size:10px}
+.quick-cols{display:grid;grid-template-columns:1fr 1fr;gap:0 40px}
+.subscribe{display:flex;border-radius:6px;overflow:hidden;background:#fff;width:100%}
+.subscribe input{flex:1;border:0;padding:6px 8px;font-size:10px;outline:0;color:#222;min-width:0}
+.subscribe button{background:var(--green);color:#fff;font-weight:600;padding:0 16px;font-size:11px}
+.copyright{grid-column:1/3;margin-top:6px}
+.tagline{grid-column:3/5;text-align:right;color:#fff;font-weight:600;font-size:11px;align-self:end}

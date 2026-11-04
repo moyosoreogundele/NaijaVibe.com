@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create post · NaijaVibe</title>
+<meta name="description" content="Discover the real Nigeria: people, culture, food, places and stories.">
+<meta name="theme-color" content="#0b8f3e">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="assets/logos/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/variables.css">
+<link rel="stylesheet" href="css/reset.css">
+<link rel="stylesheet" href="css/global.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/forms.css">
+<link rel="stylesheet" href="css/pages/create-post.css">
+<link rel="stylesheet" href="css/animations.css">
+<link rel="stylesheet" href="css/responsive.css">
+</head>
+<body data-root="" data-page="create-post" data-nav="community">
+<div class="page">
+<div id="site-header"></div>
+<div class="page-head"><h1>Create a post</h1></div>
+<div class="compose"><form class="card form" id="post-form" novalidate style="padding:24px">
+<div class="field"><label for="title">Title</label><input class="input" id="title" name="title" data-rules="required" placeholder="Give your post a clear title"><span class="error"></span></div>
+<div class="field"><label for="category">Category</label><select class="select" id="category" name="category"><option value="food">Food & Drinks</option><option value="travel">Travel & Places</option><option value="culture">Culture & Heritage</option><option value="music">Music & Entertainment</option><option value="fashion">Fashion & Style</option><option value="events">Events</option></select></div>
+<div class="field"><label for="state">State</label><select class="select" id="state" name="state"></select></div>
+<div class="field"><label for="body">Your story</label><textarea class="textarea" id="body" name="body" data-rules="required" placeholder="Tell people what makes it special"></textarea><span class="error"></span></div>
+<div class="field"><label for="image">Photo (max 5 MB)</label><input class="input" type="file" id="image" accept="image/jpeg,image/png,image/webp,image/gif"><img class="preview" id="preview" alt="Preview of your photo" hidden></div>
+<div class="field"><label for="video-file">Upload video (max 25 MB)</label><input class="input" type="file" id="video-file" accept="video/mp4,video/webm,video/ogg"><small>Uploaded videos are visible to everyone on NaijaVibe.</small></div>
+<div class="field"><label for="video-url">Or add a direct video link</label><input class="input" id="video-url" name="video_url" type="url" inputmode="url" placeholder="https://example.com/clip.mp4"><small>Use an HTTPS MP4, WebM, or Ogg video link.</small></div>
+<div class="field"><label for="social-video-url">Or share a public social video</label><input class="input" id="social-video-url" name="external_video_url" type="url" inputmode="url" placeholder="Paste a TikTok, Instagram Reel, Facebook, YouTube Short, or X link"><small>Public links from TikTok, Instagram, Facebook, YouTube, X, and other HTTPS sources appear on the separate Videos page. Some platforms require opening the original post.</small></div>
+<button class="btn btn-primary" type="submit">Publish post</button></form></div>
+<div id="site-footer"></div>
+</div>
+<script src="js/config.js"></script>
+<script src="states/state-data.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/services/auth.service.js"></script>
+<script src="js/services/profile.service.js"></script>
+<script src="js/services/posts.service.js"></script>
+<script src="js/services/comments.service.js"></script>
+<script src="js/services/follows.service.js"></script>
+<script src="js/services/uploads.service.js"></script>
+<script src="js/services/events.service.js"></script>
+<script src="js/services/businesses.service.js"></script>
+<script src="js/services/products.service.js"></script>
+<script src="js/services/reports.service.js"></script>
+<script src="js/validation.js"></script>
+<script src="js/router.js"></script>
+<script src="js/navigation.js"></script>
+<script src="js/search.js"></script>
+<script src="js/notifications.js"></script>
+<script src="js/components/toast.js"></script>
+<script src="js/components/modal.js"></script>
+<script src="js/components/header.js"></script>
+<script src="js/components/mobile-nav.js"></script>
+<script src="js/components/sidebar.js"></script>
+<script src="js/components/post-card.js"></script>
+<script src="js/components/video-card.js"></script>
+<script src="js/components/state-card.js"></script>
+<script src="js/components/event-card.js"></script>
+<script src="js/components/business-card.js"></script>
+<script src="js/pages/create-post.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

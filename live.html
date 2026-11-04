@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Naija Live · NaijaVibe</title>
+<meta name="description" content="Go live and watch what's happening across Nigeria on NaijaVibe.">
+<meta name="theme-color" content="#0b8f3e">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="assets/logos/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/variables.css">
+<link rel="stylesheet" href="css/reset.css">
+<link rel="stylesheet" href="css/global.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/forms.css">
+<link rel="stylesheet" href="css/pages/live.css">
+<link rel="stylesheet" href="css/animations.css">
+<link rel="stylesheet" href="css/responsive.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.2.js"></script>
+</head>
+<body data-root="" data-page="live" data-nav="live">
+<div class="page">
+<div id="site-header"></div>
+<main class="live-page">
+  <section class="live-heading">
+    <div>
+      <span class="live-eyebrow"><span aria-hidden="true"></span> LIVE ACROSS NIGERIA</span>
+      <h1>See what’s happening.</h1>
+      <p>Join real-time conversations, local events and stories from every corner of Naija.</p>
+    </div>
+    <button class="btn btn-primary" id="open-live-setup" type="button"><i data-i="camera"></i> Go live</button>
+  </section>
+  <div id="live-setup-notice" class="live-notice" role="status" hidden></div>
+  <section class="live-layout" aria-label="Live streams">
+    <div class="live-discovery">
+      <div class="live-section-heading">
+        <div><h2>Live now</h2><p id="live-count">Connecting to live rooms…</p></div>
+        <div class="live-discovery-controls">
+          <label class="sr-only" for="live-state-filter">Filter live streams by state</label>
+          <select class="select" id="live-state-filter"><option value="">All Nigeria</option></select>
+          <button class="btn btn-outline btn-sm" id="refresh-live" type="button">Refresh</button>
+        </div>
+      </div>
+      <div id="live-list" class="live-grid" aria-live="polite"></div>
+    </div>
+    <section id="live-room" class="live-room" aria-label="Live stream player" hidden>
+      <div class="live-player">
+        <div id="live-video" class="live-video" aria-label="Live video"></div>
+        <div class="live-player-top"><span class="live-badge"><i></i> LIVE</span><span id="live-viewer-count" class="viewer-count"></span></div>
+        <div id="live-player-message" class="live-player-message">Connecting to stream…</div>
+        <div class="live-controls">
+          <div class="live-control-group">
+            <button id="toggle-mic" class="live-control" type="button" title="Mute microphone" aria-pressed="false"><i data-i="mic"></i><span>Mic on</span></button>
+            <button id="toggle-cam" class="live-control" type="button" title="Turn camera off" aria-pressed="false"><i data-i="video"></i><span>Camera on</span></button>
+          </div>
+          <div class="live-control-group">
+            <button id="leave-live" class="live-control" type="button">Leave</button>
+            <button id="end-live" class="live-control live-control-end" type="button" hidden>End live</button>
+          </div>
+        </div>
+      </div>
+      <div class="live-room-info">
+        <div>
+          <span id="live-room-state" class="live-location"></span>
+          <h2 id="live-room-title"></h2>
+          <p id="live-room-host"></p>
+        </div>
+        <button class="live-room-close" id="close-live-room" type="button" aria-label="Close live stream"><i data-i="x"></i></button>
+      </div>
+      <div class="live-reactions-bar">
+        <span class="muted live-reactions-label">Reactions:</span>
+        <button class="live-react-btn" data-reaction="❤️" type="button" title="Love" aria-label="Send a love reaction">❤️</button>
+        <button class="live-react-btn" data-reaction="🔥" type="button" title="Fire" aria-label="Send a fire reaction">🔥</button>
+        <button class="live-react-btn" data-reaction="🎉" type="button" title="Celebrate" aria-label="Send a celebration reaction">🎉</button>
+        <button class="live-react-btn" data-reaction="🇳🇬" type="button" title="Naija pride" aria-label="Send a Nigeria reaction">🇳🇬</button>
+        <button class="live-react-btn" data-reaction="👏" type="button" title="Applause" aria-label="Send an applause reaction">👏</button>
+      </div>
+      <div class="live-chat">
+        <h3>Live chat</h3>
+        <div id="live-chat-messages" class="live-chat-messages" aria-live="polite"></div>
+        <form id="live-chat-form" class="live-chat-form">
+          <label class="sr-only" for="live-chat-input">Send a chat message</label>
+          <input id="live-chat-input" name="message" class="input" maxlength="300" placeholder="Say something kind…" autocomplete="off" required>
+          <button class="btn btn-primary btn-sm" type="submit">Send</button>
+        </form>
+      </div>
+    </section>
+  </section>
+  <dialog id="live-start-dialog" class="live-start-dialog">
+    <form id="live-start-form" method="dialog">
+      <div class="live-dialog-heading"><div><span class="live-eyebrow">GO LIVE</span><h2>Share your moment</h2></div><button id="cancel-live-start" class="live-room-close" type="button" aria-label="Close"><i data-i="x"></i></button></div>
+      <label for="live-title">What are you sharing?</label>
+      <input id="live-title" class="input" name="title" maxlength="100" minlength="3" placeholder="e.g. Live music from Lagos Island" required>
+      <label for="live-topic">Choose a category</label>
+      <select id="live-topic" class="input" name="topic" required>
+        <option value="Community">Community</option><option value="Food">Food</option><option value="Culture">Culture</option><option value="Music">Music</option><option value="Events">Events</option><option value="Travel">Travel</option>
+      </select>
+      <label for="live-room-type">Broadcast format</label>
+      <select id="live-room-type" class="input" name="room_type" required>
+        <option value="video">Live Video Broadcast (Camera & Mic)</option>
+        <option value="audio">Live Audio Room / Talkshow (Mic & Visualizer)</option>
+      </select>
+      <label for="live-state">Where are you streaming from?</label>
+      <select id="live-state" class="input" name="state" required><option value="">Choose a state</option></select>
+      <p class="live-dialog-note">Your camera and microphone will only turn on after you choose “Start live”.</p>
+      <button class="btn btn-primary" type="submit" id="start-live-submit-btn">Start live</button>
+    </form>
+  </dialog>
+</main>
+<div id="site-footer"></div>
+</div>
+<script src="js/config.js"></script>
+<script src="states/state-data.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/services/auth.service.js"></script>
+<script src="js/services/profile.service.js"></script>
+<script src="js/services/posts.service.js"></script>
+<script src="js/services/comments.service.js"></script>
+<script src="js/services/follows.service.js"></script>
+<script src="js/services/uploads.service.js"></script>
+<script src="js/services/events.service.js"></script>
+<script src="js/services/businesses.service.js"></script>
+<script src="js/services/products.service.js"></script>
+<script src="js/services/reports.service.js"></script>
+<script src="js/validation.js"></script>
+<script src="js/router.js"></script>
+<script src="js/navigation.js"></script>
+<script src="js/search.js"></script>
+<script src="js/notifications.js"></script>
+<script src="js/components/toast.js"></script>
+<script src="js/components/modal.js"></script>
+<script src="js/components/header.js"></script>
+<script src="js/components/mobile-nav.js"></script>
+<script src="js/components/sidebar.js"></script>
+<script src="js/components/post-card.js"></script>
+<script src="js/components/video-card.js"></script>
+<script src="js/components/state-card.js"></script>
+<script src="js/components/event-card.js"></script>
+<script src="js/components/business-card.js"></script>
+<script src="js/pages/live.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+[
+ {
+  "slug": "food",
+  "name": "Food & Drinks",
+  "icon": "utensils"
+ },
+ {
+  "slug": "travel",
+  "name": "Travel & Places",
+  "icon": "plane"
+ },
+ {
+  "slug": "culture",
+  "name": "Culture & Heritage",
+  "icon": "masks"
+ },
+ {
+  "slug": "music",
+  "name": "Music & Entertainment",
+  "icon": "music"
+ },
+ {
+  "slug": "fashion",
+  "name": "Fashion & Style",
+  "icon": "shirt"
+ },
+ {
+  "slug": "events",
+  "name": "Events",
+  "icon": "calendar"
+ },
+ {
+  "slug": "marketplace",
+  "name": "Marketplace",
+  "icon": "store"
+ },
+ {
+  "slug": "businesses",
+  "name": "Businesses",
+  "icon": "briefcase"
+ }
+]

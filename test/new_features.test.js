@@ -1,0 +1,297 @@
+const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { after, before, test } = require('node:test');
+
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'naijavibe-features-test-'));
+process.env.AUTH_DB_PATH = path.join(dataDir, 'auth.sqlite');
+process.env.NODE_ENV = 'test';
+process.env.SESSION_SECRET = 'test-only-session-secret-for-features-test';
+process.env.RESEND_API_KEY = 're_test_only';
+process.env.RESEND_FROM_EMAIL = 'verify@example.com';
+process.env.APP_NAME = 'NaijaVibe';
+process.env.APP_URL = 'http://localhost';
+
+const { app, db } = require('../server');
+const originalFetch = global.fetch;
+let server;
+let baseUrl;
+const signupCodes = new Map();
+
+global.fetch = async (url, options) => {
+  const parsedUrl = new URL(url);
+  if (parsedUrl.host === 'api.resend.com') {
+    const email = JSON.parse(options.body);
+    const code = email.text.match(/verification code is (\d{6})/i)?.[1];
+    if (code) signupCodes.set(email.to[0], code);
+    return new Response(JSON.stringify({ id: crypto.randomUUID() }), { status: 200 });
+  }
+  return originalFetch(url, options);
+};
+
+before(async () => {
+  server = app.listen(0);
+  await new Promise(resolve => server.once('listening', resolve));
+  baseUrl = `http://127.0.0.1:${server.address().port}`;
+});
+
+after(async () => {
+  global.fetch = originalFetch;
+  await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  db.close();
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+async function api(path, options = {}) {
+  const res = await originalFetch(`${baseUrl}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.cookie ? { Cookie: options.cookie } : {}),
+      ...(options.headers || {})
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+  const json = await res.json().catch(() => ({}));
+  return { res, json };
+}
+
+async function createVerifiedUser(email, username, password = 'strong-password-123') {
+  await api('/api/auth/signup', { method: 'POST', body: { email, username, password } });
+  const code = signupCodes.get(email);
+  const verify = await api('/api/auth/verify-email', { method: 'POST', body: { email, code } });
+  const cookie = verify.res.headers.get('set-cookie')?.split(';')[0];
+  return { user: verify.json.user, cookie };
+}
+
+test('Feature 1: User profiles, settings, password change, and creator follows', async () => {
+  const { user: user1, cookie: cookie1 } = await createVerifiedUser('tunde@example.com', 'tunde_lagos');
+  const { user: user2, cookie: cookie2 } = await createVerifiedUser('chioma@example.com', 'chioma_enugu');
+
+  // 1. Get profile
+  const profileRes = await api('/api/users/profile', { cookie: cookie1 });
+  assert.equal(profileRes.res.status, 200);
+  assert.equal(profileRes.json.user.username, 'tunde_lagos');
+
+  // 2. Update profile
+  const updateRes = await api('/api/users/profile', {
+    method: 'PATCH',
+    cookie: cookie1,
+    body: {
+      display_name: 'Tunde Adebayo',
+      bio: 'Lagos Island techie and afrobeats enthusiast.',
+      state: 'Lagos',
+      phone: '+234 801 234 5678'
+    }
+  });
+  assert.equal(updateRes.res.status, 200);
+  assert.equal(updateRes.json.profile.display_name, 'Tunde Adebayo');
+  assert.equal(updateRes.json.profile.state, 'Lagos');
+
+  // 3. Update settings
+  const settingsRes = await api('/api/users/settings', {
+    method: 'PATCH',
+    cookie: cookie1,
+    body: { notif_email: false, notif_push: true, private: true }
+  });
+  assert.equal(settingsRes.res.status, 200);
+  assert.equal(settingsRes.json.settings.private, true);
+
+  // 4. Change password
+  const pwRes = await api('/api/users/change-password', {
+    method: 'POST',
+    cookie: cookie1,
+    body: { current_password: 'strong-password-123', new_password: 'new-strong-password-456' }
+  });
+  assert.equal(pwRes.res.status, 200);
+  assert.equal(pwRes.json.changed, true);
+
+  // 5. Follow / unfollow
+  const followRes1 = await api(`/api/users/tunde_lagos/follow`, { method: 'POST', cookie: cookie2 });
+  assert.equal(followRes1.res.status, 200);
+  assert.equal(followRes1.json.following, true);
+  assert.equal(followRes1.json.followersCount, 1);
+
+  // Check public profile
+  const publicRes = await api(`/api/users/tunde_lagos/profile`, { cookie: cookie2 });
+  assert.equal(publicRes.res.status, 200);
+  assert.equal(publicRes.json.profile.isFollowing, true);
+  assert.equal(publicRes.json.profile.stats.followers, 1);
+
+  // Unfollow
+  const followRes2 = await api(`/api/users/tunde_lagos/follow`, { method: 'POST', cookie: cookie2 });
+  assert.equal(followRes2.res.status, 200);
+  assert.equal(followRes2.json.following, false);
+});
+
+test('Feature 2: Marketplace products, businesses, and checkout flow', async () => {
+  const { user, cookie } = await createVerifiedUser('kemi@example.com', 'kemi_designs');
+
+  // 1. List initial seeded products
+  const listRes = await api('/api/products');
+  assert.equal(listRes.res.status, 200);
+  assert.ok(listRes.json.items.length >= 4);
+
+  // 2. Create a new product
+  const createProdRes = await api('/api/products', {
+    method: 'POST',
+    cookie,
+    body: {
+      name: 'Handmade Benin Coral Bead Necklace',
+      price: 32000,
+      category: 'fashion',
+      state: 'Edo',
+      description: 'Authentic royal coral beads for ceremonies.',
+      stock: 12
+    }
+  });
+  assert.equal(createProdRes.res.status, 201);
+  assert.equal(createProdRes.json.product.name, 'Handmade Benin Coral Bead Necklace');
+  assert.equal(createProdRes.json.product.price, 32000);
+
+  // 3. Register a business
+  const bizRes = await api('/api/businesses', {
+    method: 'POST',
+    cookie,
+    body: {
+      name: 'Kemi African Luxe',
+      cat: 'Fashion & Style',
+      state: 'Lagos',
+      description: 'Exclusive bridal and cultural Nigerian fashion.',
+      phone: '+234 812 999 8888',
+      address: 'Victoria Island, Lagos'
+    }
+  });
+  assert.equal(bizRes.res.status, 201);
+  assert.equal(bizRes.json.business.name, 'Kemi African Luxe');
+
+  // 4. Place an order / checkout
+  const orderRes = await api('/api/orders', {
+    method: 'POST',
+    cookie,
+    body: {
+      customer_name: 'Emeka Nwosu',
+      customer_email: 'emeka@example.com',
+      customer_phone: '08023456789',
+      delivery_address: 'Plot 45 Admiralty Way, Lekki',
+      state: 'Lagos',
+      payment_method: 'Pay on Delivery',
+      items: [
+        { id: createProdRes.json.product.id, name: 'Handmade Benin Coral Bead Necklace', price: 32000, qty: 1 }
+      ]
+    }
+  });
+  assert.equal(orderRes.res.status, 201);
+  assert.match(orderRes.json.order.order_number, /^NV-\d+-\d+$/);
+  assert.equal(orderRes.json.order.total_amount, 32000);
+
+  // 5. Query user orders
+  const myOrdersRes = await api('/api/orders', { cookie });
+  assert.equal(myOrdersRes.res.status, 200);
+  assert.equal(myOrdersRes.json.orders.length, 1);
+});
+
+test('Feature 3: Live rooms, audio/video streaming, chat messages, and reactions', async () => {
+  const health = await originalFetch(`${baseUrl}/api/health`);
+  assert.equal(health.status, 200);
+  assert.deepEqual(await health.json(), { status: 'ok' });
+
+  const { user: host, cookie: hostCookie } = await createVerifiedUser('livehost@example.com', 'live_host_ng');
+  const { user: viewer, cookie: viewerCookie } = await createVerifiedUser('viewer@example.com', 'live_viewer_ng');
+
+  // 1. Host creates a live audio room
+  const createRoomRes = await api('/api/live/rooms', {
+    method: 'POST',
+    cookie: hostCookie,
+    body: {
+      title: 'Lagos Evening Chill & Afrobeat Gossip',
+      topic: 'Music',
+      state: 'Lagos',
+      room_type: 'audio'
+    }
+  });
+  assert.equal(createRoomRes.res.status, 201);
+  const roomId = createRoomRes.json.room.id;
+  assert.equal(createRoomRes.json.room.room_type, 'audio');
+
+  // 2. Fetch active rooms
+  const roomsRes = await api('/api/live/rooms');
+  assert.equal(roomsRes.res.status, 200);
+  const createdInList = roomsRes.json.rooms.find(r => r.id === roomId);
+  assert.ok(createdInList);
+  assert.equal(createdInList.host_username, 'live_host_ng');
+  assert.equal(createdInList.viewer_count, 0);
+  assert.equal(roomsRes.json.rooms.some(r => r.id.startsWith('live-lagos-') || r.id.startsWith('live-kano-') || r.id.startsWith('live-calabar-')), false);
+  const filteredRoomsRes = await api('/api/live/rooms?state=Oyo');
+  assert.equal(filteredRoomsRes.res.status, 200);
+  assert.equal(filteredRoomsRes.json.rooms.some(r => r.id === roomId), false);
+  const invalidStateRoomsRes = await api('/api/live/rooms?state=Unknown');
+  assert.equal(invalidStateRoomsRes.res.status, 400);
+
+  // 3. Send chat message
+  const msgRes = await api(`/api/live/rooms/${roomId}/messages`, {
+    method: 'POST',
+    cookie: viewerCookie,
+    body: { body: 'Sound is super clear from Abuja! 🇳🇬🔥' }
+  });
+  assert.equal(msgRes.res.status, 201);
+  assert.equal(msgRes.json.message.body, 'Sound is super clear from Abuja! 🇳🇬🔥');
+  assert.equal(msgRes.json.message.username, 'live_viewer_ng');
+
+  const firstViewerId = '00000000-0000-4000-8000-000000000001';
+  const secondViewerId = '00000000-0000-4000-8000-000000000002';
+  let viewerRes = await api(`/api/live/rooms/${roomId}/viewer`, {
+    method: 'POST',
+    body: { viewerId: firstViewerId }
+  });
+  assert.equal(viewerRes.json.viewer_count, 1);
+  viewerRes = await api(`/api/live/rooms/${roomId}/viewer`, {
+    method: 'POST',
+    body: { viewerId: firstViewerId }
+  });
+  assert.equal(viewerRes.json.viewer_count, 1);
+  viewerRes = await api(`/api/live/rooms/${roomId}/viewer`, {
+    method: 'POST',
+    cookie: viewerCookie,
+    body: { viewerId: secondViewerId }
+  });
+  assert.equal(viewerRes.json.viewer_count, 2);
+  viewerRes = await api(`/api/live/rooms/${roomId}/viewer`, {
+    method: 'POST',
+    cookie: hostCookie,
+    body: { viewerId: '00000000-0000-4000-8000-000000000003' }
+  });
+  assert.equal(viewerRes.json.viewer_count, 2);
+  const activeRoom = (await api('/api/live/rooms')).json.rooms.find(room => room.id === roomId);
+  assert.equal(activeRoom.viewer_count, 2);
+  viewerRes = await api(`/api/live/rooms/${roomId}/viewer`, {
+    method: 'DELETE',
+    body: { viewerId: firstViewerId }
+  });
+  assert.equal(viewerRes.json.viewer_count, 1);
+  const invalidViewerRes = await api(`/api/live/rooms/${roomId}/viewer`, {
+    method: 'POST',
+    body: { viewerId: 'not-a-uuid' }
+  });
+  assert.equal(invalidViewerRes.res.status, 400);
+
+  // 4. Send emoji reaction
+  const reactRes = await api(`/api/live/rooms/${roomId}/react`, {
+    method: 'POST',
+    cookie: viewerCookie,
+    body: { reaction: '🔥' }
+  });
+  assert.equal(reactRes.res.status, 201);
+  assert.equal(reactRes.json.reaction, '🔥');
+
+  // 5. Host ends stream
+  const endRes = await api(`/api/live/rooms/${roomId}/end`, {
+    method: 'POST',
+    cookie: hostCookie
+  });
+  assert.equal(endRes.res.status, 200);
+  assert.equal(endRes.json.ended, true);
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM live_viewers WHERE room_id = ?').get(roomId).count, 0);
+});

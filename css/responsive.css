@@ -1,0 +1,45 @@
+@media (max-width:1280px){
+  :root{--gutter:32px}
+  .main-nav a{padding:7px 12px}
+  .hero h1{font-size:60px}
+}
+@media (max-width:1100px){
+  .home-grid{grid-template-columns:1fr;padding-right:0}
+  .home-side{padding:0 var(--gutter) 20px}
+  .cols-7{grid-template-columns:repeat(4,1fr)}.cols-5{grid-template-columns:repeat(3,1fr)}
+  .layout-2{grid-template-columns:1fr}
+  .site-footer{grid-template-columns:1fr 1fr}.copyright,.tagline{grid-column:auto;text-align:left}
+  .community-bar{height:auto;flex-wrap:wrap}.community-bar .txt{padding:12px 12px 12px 146px;width:auto}.community-bar .perks{flex-basis:100%;padding:8px 0}
+}
+@media (max-width:960px){
+  .main-nav{overflow:visible;justify-content:center;flex-wrap:wrap;gap:2px}
+  .main-nav a{padding:5px 8px;font-size:11px}
+  .main-nav a .i{font-size:14px}
+  .main-nav .more-wrap>button{padding:5px 8px!important;font-size:11px!important}
+  .header-search{display:none}
+  .header-actions .btn{display:none}
+  .hero{height:auto;border-radius:0 0 30px 30px;padding-bottom:20px}
+  .hero::before{background:rgba(8,60,30,.6)}
+  .hero h1{font-size:46px}.hero .welcome{font-size:32px}
+  .cat-strip{grid-template-columns:repeat(4,1fr);row-gap:10px}
+  .cols-4,.cols-3{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:560px){
+  :root{--gutter:16px}
+  body{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+  .main-nav{position:fixed;left:0;right:0;bottom:0;z-index:150;flex-wrap:nowrap;justify-content:flex-start;gap:0;height:calc(60px + env(safe-area-inset-bottom));padding:4px 0 calc(4px + env(safe-area-inset-bottom));overflow-x:auto;overflow-y:hidden;background:var(--card);border-top:1px solid var(--line);box-shadow:0 -2px 12px rgba(0,0,0,.1);scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .main-nav::-webkit-scrollbar{display:none}
+  .main-nav>a{flex:1 0 48px;flex-direction:column;justify-content:center;gap:3px;height:100%;padding:5px 2px;font-size:8.5px;line-height:1}
+  .main-nav>a .i{font-size:18px}
+  .main-nav>a span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .main-nav .more-wrap{display:none}
+  .cols-5,.cols-7,.cols-6{grid-template-columns:repeat(2,1fr)}
+  .site-footer{grid-template-columns:1fr}
+  .hero h1{font-size:38px}
+  .logo b{font-size:18px}
+  .top-bar{gap:8px}
+  .logo img{width:40px}
+  .header-actions{gap:5px}
+  .header-actions .icon-btn{width:30px;height:30px}
+  .hero-chips{flex-wrap:wrap}
+}

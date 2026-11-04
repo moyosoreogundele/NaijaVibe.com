@@ -1,0 +1,5 @@
+.auth-card .logo{justify-content:center;margin-bottom:16px}
+.auth-card .logo b{font-size:24px}
+.divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;margin:6px 0}.divider::before,.divider::after{content:"";flex:1;border-top:1px solid var(--line)}
+.password-input{position:relative}.password-input .input{padding-right:68px}.password-toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--muted);font:inherit;font-size:13px;font-weight:600;cursor:pointer}.password-toggle:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:3px}
+#signup-form[hidden]{display:none}

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edit profile · NaijaVibe</title>
+<meta name="description" content="Discover the real Nigeria: people, culture, food, places and stories.">
+<meta name="theme-color" content="#0b8f3e">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="assets/logos/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/variables.css">
+<link rel="stylesheet" href="css/reset.css">
+<link rel="stylesheet" href="css/global.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/forms.css">
+<link rel="stylesheet" href="css/pages/profile.css">
+<link rel="stylesheet" href="css/animations.css">
+<link rel="stylesheet" href="css/responsive.css">
+</head>
+<body data-root="" data-page="edit-profile" data-nav="">
+<div class="page">
+<div id="site-header"></div>
+<div class="page-head"><h1>Edit profile</h1></div>
+<div class="compose">
+  <form class="card form" id="profile-form" novalidate style="padding:24px">
+    <div class="field">
+      <label for="display_name">Display name</label>
+      <input class="input" id="display_name" name="display_name" data-rules="required" placeholder="e.g. Tunde Adebayo">
+      <span class="error"></span>
+    </div>
+    <div class="field">
+      <label for="username">Username</label>
+      <input class="input" id="username" name="username" data-rules="username" disabled style="opacity:0.7" title="Username is unique to your account">
+      <span class="error"></span>
+    </div>
+    <div class="field">
+      <label for="state">Nigerian State / Location</label>
+      <select class="input" id="state" name="state">
+        <option value="">Select your state</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="bio">Bio</label>
+      <textarea class="textarea" id="bio" name="bio" style="min-height:90px" placeholder="Tell the community what part of Nigeria you represent or what you love..."></textarea>
+    </div>
+    <div class="field">
+      <label for="website">Website / Portfolio link</label>
+      <input class="input" id="website" name="website" placeholder="https://yourbrand.ng">
+    </div>
+    <div class="field">
+      <label for="phone">Phone / WhatsApp (Optional)</label>
+      <input class="input" id="phone" name="phone" placeholder="+234 800 000 0000">
+    </div>
+    <div class="field">
+      <label for="avatar">Profile photo</label>
+      <input class="input" type="file" id="avatar" name="avatar" accept="image/jpeg,image/png,image/webp">
+      <small class="muted" style="display:block;margin-top:4px">Upload a square JPEG, PNG, or WebP photo up to 5MB.</small>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" type="submit" id="save-profile-btn">Save changes</button>
+      <a class="btn btn-outline" href="profile.html">Cancel</a>
+    </div>
+  </form>
+</div>
+<div id="site-footer"></div>
+</div>
+<script src="js/config.js"></script>
+<script src="states/state-data.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/services/auth.service.js"></script>
+<script src="js/services/profile.service.js"></script>
+<script src="js/services/posts.service.js"></script>
+<script src="js/services/comments.service.js"></script>
+<script src="js/services/follows.service.js"></script>
+<script src="js/services/uploads.service.js"></script>
+<script src="js/services/events.service.js"></script>
+<script src="js/services/businesses.service.js"></script>
+<script src="js/services/products.service.js"></script>
+<script src="js/services/reports.service.js"></script>
+<script src="js/validation.js"></script>
+<script src="js/router.js"></script>
+<script src="js/navigation.js"></script>
+<script src="js/search.js"></script>
+<script src="js/notifications.js"></script>
+<script src="js/components/toast.js"></script>
+<script src="js/components/modal.js"></script>
+<script src="js/components/header.js"></script>
+<script src="js/components/mobile-nav.js"></script>
+<script src="js/components/sidebar.js"></script>
+<script src="js/components/post-card.js"></script>
+<script src="js/components/video-card.js"></script>
+<script src="js/components/state-card.js"></script>
+<script src="js/components/event-card.js"></script>
+<script src="js/components/business-card.js"></script>
+<script src="js/pages/profile.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
