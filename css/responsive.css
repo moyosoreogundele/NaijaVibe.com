@@ -32,7 +32,7 @@
   .main-nav>a .i{font-size:18px}
   .main-nav>a span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .main-nav .more-wrap{display:none}
-  .cols-5,.cols-7,.cols-6{grid-template-columns:repeat(2,1fr)}
+  .card-grid,.market-grid{grid-template-columns:minmax(0,1fr)}
   .site-footer{grid-template-columns:1fr}
   .hero h1{font-size:38px}
   .logo b{font-size:18px}

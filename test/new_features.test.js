@@ -13,6 +13,8 @@ process.env.RESEND_API_KEY = 're_test_only';
 process.env.RESEND_FROM_EMAIL = 'verify@example.com';
 process.env.APP_NAME = 'NaijaVibe';
 process.env.APP_URL = 'http://localhost';
+process.env.AGORA_APP_ID = '0123456789abcdef0123456789abcdef';
+process.env.AGORA_APP_CERTIFICATE = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
 const { app, db } = require('../server');
 const originalFetch = global.fetch;
@@ -113,6 +115,10 @@ test('Feature 1: User profiles, settings, password change, and creator follows',
   assert.equal(followRes1.res.status, 200);
   assert.equal(followRes1.json.following, true);
   assert.equal(followRes1.json.followersCount, 1);
+  const followNotifications = await api('/api/notifications', { cookie: cookie1 });
+  assert.equal(followNotifications.res.status, 200);
+  assert.equal(followNotifications.json.notifications[0].type, 'follow');
+  assert.match(followNotifications.json.notifications[0].text, /@chioma_enugu/);
 
   // Check public profile
   const publicRes = await api(`/api/users/tunde_lagos/profile`, { cookie: cookie2 });
@@ -124,6 +130,163 @@ test('Feature 1: User profiles, settings, password change, and creator follows',
   const followRes2 = await api(`/api/users/tunde_lagos/follow`, { method: 'POST', cookie: cookie2 });
   assert.equal(followRes2.res.status, 200);
   assert.equal(followRes2.json.following, false);
+});
+
+test('direct messages are private, searchable, and text-only', async () => {
+  const { user: sender, cookie: senderCookie } = await createVerifiedUser('messenger@example.com', 'messenger');
+  const { user: recipient, cookie: recipientCookie } = await createVerifiedUser('friend@example.com', 'friend_naija');
+  const { cookie: strangerCookie } = await createVerifiedUser('stranger@example.com', 'stranger');
+
+  const anonymousSearch = await api('/api/users/search?q=friend');
+  assert.equal(anonymousSearch.res.status, 401);
+  const search = await api('/api/users/search?q=friend', { cookie: senderCookie });
+  assert.equal(search.res.status, 200);
+  assert.equal(search.json.users[0].username, 'friend_naija');
+
+  const presence = await api('/api/users/presence', { method: 'POST', cookie: recipientCookie, body: {} });
+  assert.equal(presence.res.status, 200);
+  const conversation = await api('/api/messages/conversations', {
+    method: 'POST',
+    cookie: senderCookie,
+    body: { user_id: recipient.id }
+  });
+  assert.equal(conversation.res.status, 200);
+  assert.equal(conversation.json.peer.username, 'friend_naija');
+  const conversationId = conversation.json.conversation_id;
+
+  const sent = await api(`/api/messages/conversations/${conversationId}/messages`, {
+    method: 'POST',
+    cookie: senderCookie,
+    body: { body: 'Hello, are you online?' }
+  });
+  assert.equal(sent.res.status, 201);
+  assert.equal(sent.json.message.sender_id, sender.id);
+  assert.equal(sent.json.message.body, 'Hello, are you online?');
+  const messageNotifications = await api('/api/notifications', { cookie: recipientCookie });
+  assert.equal(messageNotifications.res.status, 200);
+  assert.equal(messageNotifications.json.notifications[0].type, 'message');
+  assert.match(messageNotifications.json.notifications[0].url, /messages\.html\?conversation=/);
+  const privateNotifications = await api('/api/notifications', { cookie: strangerCookie });
+  assert.equal(privateNotifications.json.notifications.length, 0);
+  const markedRead = await api('/api/notifications/read', {
+    method: 'PATCH',
+    cookie: recipientCookie,
+    body: {}
+  });
+  assert.equal(markedRead.res.status, 200);
+  const readNotifications = await api('/api/notifications', { cookie: recipientCookie });
+  assert.equal(readNotifications.json.notifications[0].unread, false);
+
+  const received = await api(`/api/messages/conversations/${conversationId}/messages`, { cookie: recipientCookie });
+  assert.equal(received.res.status, 200);
+  assert.equal(received.json.messages.length, 1);
+  assert.equal(received.json.messages[0].body, 'Hello, are you online?');
+
+  const forbidden = await api(`/api/messages/conversations/${conversationId}/messages`, { cookie: strangerCookie });
+  assert.equal(forbidden.res.status, 404);
+  const tooLong = await api(`/api/messages/conversations/${conversationId}/messages`, {
+    method: 'POST',
+    cookie: senderCookie,
+    body: { body: 'x'.repeat(2001) }
+  });
+  assert.equal(tooLong.res.status, 400);
+
+  const conversations = await api('/api/messages/conversations', { cookie: recipientCookie });
+  assert.equal(conversations.json.conversations.length, 1);
+  assert.equal(conversations.json.conversations[0].last_message, 'Hello, are you online?');
+});
+
+test('push subscriptions are authenticated and private keys are never returned', async () => {
+  const { cookie } = await createVerifiedUser('push-user@example.com', 'push_user');
+  const anonymousConfig = await api('/api/push/config');
+  assert.equal(anonymousConfig.res.status, 401);
+
+  const config = await api('/api/push/config', { cookie });
+  assert.equal(config.res.status, 200);
+  assert.equal(typeof config.json.publicKey, 'string');
+  assert.equal(config.json.privateKey, undefined);
+
+  const subscription = {
+    endpoint: 'https://fcm.googleapis.com/fcm/send/subscription-token',
+    keys: { p256dh: 'public-key-value', auth: 'auth-key-value' }
+  };
+  await api('/api/users/settings', {
+    method: 'PATCH',
+    cookie,
+    body: { notif_push: false }
+  });
+  const subscribed = await api('/api/push/subscriptions', {
+    method: 'POST',
+    cookie,
+    body: { subscription }
+  });
+  assert.equal(subscribed.res.status, 200);
+  assert.equal(subscribed.json.subscribed, true);
+  const settings = await api('/api/users/settings', { cookie });
+  assert.equal(settings.json.settings.notif_push, true);
+  const invalidSubscription = await api('/api/push/subscriptions', {
+    method: 'POST',
+    cookie,
+    body: {
+      subscription: {
+        endpoint: 'https://127.0.0.1/private',
+        keys: { p256dh: 'public-key-value', auth: 'auth-key-value' }
+      }
+    }
+  });
+  assert.equal(invalidSubscription.res.status, 400);
+
+  const unsubscribed = await api('/api/push/subscriptions', {
+    method: 'DELETE',
+    cookie,
+    body: { endpoint: subscription.endpoint }
+  });
+  assert.equal(unsubscribed.res.status, 200);
+  assert.equal(unsubscribed.json.unsubscribed, true);
+});
+
+test('video likes persist per user and return an accurate shared count', async () => {
+  const { cookie: creatorCookie } = await createVerifiedUser('videocreator@example.com', 'video_creator');
+  const { user: viewer, cookie: viewerCookie } = await createVerifiedUser('videofan@example.com', 'video_fan');
+  const { cookie: otherCookie } = await createVerifiedUser('otherfan@example.com', 'other_fan');
+  const created = await api('/api/posts', {
+    method: 'POST',
+    cookie: creatorCookie,
+    body: {
+      title: 'Market day in Ibadan',
+      body: 'A short video from the market.',
+      category: 'culture',
+      state: 'Oyo',
+      video_url: 'https://example.com/market-day.mp4'
+    }
+  });
+  assert.equal(created.res.status, 201);
+  const id = created.json.post.id;
+
+  const unauthenticated = await api(`/api/videos/${id}/like`, { method: 'POST' });
+  assert.equal(unauthenticated.res.status, 401);
+  const firstLike = await api(`/api/videos/${id}/like`, { method: 'POST', cookie: viewerCookie });
+  assert.deepEqual(firstLike.json, { liked: true, likes: 1 });
+  const creatorNotifications = await api('/api/notifications', { cookie: creatorCookie });
+  assert.equal(creatorNotifications.json.notifications[0].type, 'like');
+  assert.match(creatorNotifications.json.notifications[0].url, new RegExp(`post\\.html\\?id=${id}`));
+  const videoAfterLike = await api(`/api/videos/${id}`, { cookie: viewerCookie });
+  assert.equal(videoAfterLike.json.video.likes, 1);
+  assert.equal(videoAfterLike.json.video.liked, true);
+
+  const otherLike = await api(`/api/videos/${id}/like`, { method: 'POST', cookie: otherCookie });
+  assert.deepEqual(otherLike.json, { liked: true, likes: 2 });
+  const otherView = await api(`/api/videos/${id}`, { cookie: otherCookie });
+  assert.equal(otherView.json.video.likes, 2);
+  assert.equal(otherView.json.video.liked, true);
+
+  const unlike = await api(`/api/videos/${id}/like`, { method: 'POST', cookie: viewerCookie });
+  assert.deepEqual(unlike.json, { liked: false, likes: 1 });
+  const trending = await api('/api/videos/trending?state=Oyo', { cookie: viewerCookie });
+  const listedVideo = trending.json.items.find(item => item.id === id);
+  assert.equal(listedVideo.likes, 1);
+  assert.equal(listedVideo.liked, false);
+  assert.equal(viewer.username, 'video_fan');
 });
 
 test('Feature 2: Marketplace products, businesses, and checkout flow', async () => {
@@ -196,7 +359,15 @@ test('Feature 2: Marketplace products, businesses, and checkout flow', async () 
 test('Feature 3: Live rooms, audio/video streaming, chat messages, and reactions', async () => {
   const health = await originalFetch(`${baseUrl}/api/health`);
   assert.equal(health.status, 200);
-  assert.deepEqual(await health.json(), { status: 'ok' });
+  assert.deepEqual(await health.json(), {
+    status: 'ok',
+    services: {
+      emailConfigured: true,
+      liveConfigured: true,
+      liveTokenMode: 'token',
+      persistentStorageConfigured: true
+    }
+  });
 
   const { user: host, cookie: hostCookie } = await createVerifiedUser('livehost@example.com', 'live_host_ng');
   const { user: viewer, cookie: viewerCookie } = await createVerifiedUser('viewer@example.com', 'live_viewer_ng');
@@ -215,6 +386,42 @@ test('Feature 3: Live rooms, audio/video streaming, chat messages, and reactions
   assert.equal(createRoomRes.res.status, 201);
   const roomId = createRoomRes.json.room.id;
   assert.equal(createRoomRes.json.room.room_type, 'audio');
+
+  const hostToken = await api(`/api/live/rooms/${roomId}/token`, {
+    method: 'POST',
+    cookie: hostCookie,
+    body: { role: 'publisher' }
+  });
+  assert.equal(hostToken.res.status, 200);
+  assert.equal(hostToken.json.role, 'publisher');
+  assert.equal(hostToken.json.channelName, roomId);
+  assert.equal(typeof hostToken.json.token, 'string');
+  assert.equal(Object.hasOwn(hostToken.json, 'appCertificate'), false);
+  const certificate = process.env.AGORA_APP_CERTIFICATE;
+  const configuredAppId = process.env.AGORA_APP_ID;
+  try {
+    delete process.env.AGORA_APP_CERTIFICATE;
+    delete process.env.AGORA_APP_ID;
+    const tokenless = await api(`/api/live/rooms/${roomId}/token`, {
+      method: 'POST',
+      cookie: hostCookie,
+      body: { role: 'publisher' }
+    });
+    assert.equal(tokenless.res.status, 200);
+    assert.equal(tokenless.json.tokenless, true);
+    assert.equal(tokenless.json.token, null);
+    assert.equal(tokenless.json.appId, '569762c4c1444c27b3b6f0669a3a21c9');
+  } finally {
+    process.env.AGORA_APP_CERTIFICATE = certificate;
+    process.env.AGORA_APP_ID = configuredAppId;
+  }
+  const viewerToken = await api(`/api/live/rooms/${roomId}/token`, {
+    method: 'POST',
+    cookie: viewerCookie,
+    body: { role: 'publisher' }
+  });
+  assert.equal(viewerToken.res.status, 200);
+  assert.equal(viewerToken.json.role, 'subscriber');
 
   // 2. Fetch active rooms
   const roomsRes = await api('/api/live/rooms');
@@ -239,6 +446,21 @@ test('Feature 3: Live rooms, audio/video streaming, chat messages, and reactions
   assert.equal(msgRes.res.status, 201);
   assert.equal(msgRes.json.message.body, 'Sound is super clear from Abuja! 🇳🇬🔥');
   assert.equal(msgRes.json.message.username, 'live_viewer_ng');
+  const insertChatMessage = db.prepare(`
+    INSERT INTO live_chat_messages (room_id, user_id, sender_name, body, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  for (let index = 0; index < 65; index += 1) {
+    insertChatMessage.run(roomId, viewer.id, viewer.username, `Chat message ${index}`, Date.now() + index);
+  }
+  const chatHistory = await api(`/api/live/rooms/${roomId}/messages`);
+  assert.equal(chatHistory.json.messages.length, 60);
+  assert.equal(chatHistory.json.messages[0].body, 'Chat message 5');
+  const chatUpdates = await api(`/api/live/rooms/${roomId}/messages?after=${msgRes.json.message.id}`);
+  assert.equal(chatUpdates.json.messages.length, 65);
+  assert.equal(chatUpdates.json.messages.at(-1).body, 'Chat message 64');
+  const invalidChatCursor = await api(`/api/live/rooms/${roomId}/messages?after=not-a-number`);
+  assert.equal(invalidChatCursor.res.status, 400);
 
   const firstViewerId = '00000000-0000-4000-8000-000000000001';
   const secondViewerId = '00000000-0000-4000-8000-000000000002';

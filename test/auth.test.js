@@ -10,7 +10,7 @@ process.env.AUTH_DB_PATH = path.join(dataDir, 'auth.sqlite');
 process.env.NODE_ENV = 'test';
 process.env.SESSION_SECRET = 'test-only-session-secret';
 process.env.RESEND_API_KEY = 're_test_only';
-process.env.RESEND_FROM_EMAIL = 'verify@example.com';
+process.env.RESEND_FROM_EMAIL = 'NaijaVibe <verify@example.com>';
 process.env.APP_NAME = 'NaijaVibe';
 process.env.APP_URL = 'http://localhost';
 
@@ -101,7 +101,7 @@ test('signup requires a branded email OTP before creating an account; sessions, 
   assert.equal(result.response.headers.get('set-cookie'), null);
   assert.equal(emailCount, initialEmailCount + 1);
   assert.equal(db.prepare('SELECT 1 FROM users WHERE email = ?').get('moyo@example.com'), undefined);
-  assert.match(deliveredEmails.at(-1).from, /^NaijaVibe <verify@example\.com>$/);
+  assert.equal(deliveredEmails.at(-1).from, 'NaijaVibe <verify@example.com>');
   assert.match(deliveredEmails.at(-1).subject, /NaijaVibe/);
   assert.match(deliveredEmails.at(-1).text, /NaijaVibe verification code is \d{6}/);
   const code = signupCodes.get('moyo@example.com');
@@ -178,8 +178,26 @@ test('signup rejects invalid input and prevents duplicate accounts', async () =>
     username: 'another_user',
     password: 'safe-password-123'
   });
+
   assert.equal(result.response.status, 409);
   assert.equal(result.body.error.code, 'ACCOUNT_EXISTS');
+});
+
+test('signup reports invalid Resend sender configuration without storing an unusable OTP', async () => {
+  const originalSender = process.env.RESEND_FROM_EMAIL;
+  process.env.RESEND_FROM_EMAIL = 'not-a-valid-sender';
+  try {
+    const result = await post('signup', {
+      email: 'bad-sender@example.com',
+      username: 'bad_sender',
+      password: 'safe-password-123'
+    });
+    assert.equal(result.response.status, 503);
+    assert.equal(result.body.error.code, 'EMAIL_SENDER_INVALID');
+    assert.equal(db.prepare('SELECT 1 FROM pending_signups WHERE email = ?').get('bad-sender@example.com'), undefined);
+  } finally {
+    process.env.RESEND_FROM_EMAIL = originalSender;
+  }
 });
 
 test('headline discussions are public to read and require a signed-in account to post', async () => {

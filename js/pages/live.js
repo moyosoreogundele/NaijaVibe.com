@@ -11,7 +11,8 @@ NV.pages.live = async function () {
   const liveStateFilter = NV.$('#live-state-filter');
 
   let currentRoom = null;
-  let localMediaStream = null;
+  let localAgoraTracks = [];
+  let agoraClient = null;
   let roomUser = null;
   let isHost = false;
   let chatPollTimer = null;
@@ -19,6 +20,7 @@ NV.pages.live = async function () {
   let heartbeatTimer = null;
   let streamListTimer = null;
   let lastMessageId = 0;
+  const renderedMessageIds = new Set();
   let lastReactionId = 0;
   let isMicMuted = false;
   let isCamOff = false;
@@ -125,6 +127,8 @@ NV.pages.live = async function () {
   // Chat message rendering
   function addChatMessage(item) {
     if (!chatMessages) return;
+    const messageId = Number(item.id) || 0;
+    if (messageId && renderedMessageIds.has(messageId)) return;
     const username = item.username || 'Viewer';
     const time = new Date(item.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const el = document.createElement('div');
@@ -132,18 +136,26 @@ NV.pages.live = async function () {
     el.innerHTML = `<b>@${NV.esc(username)}:</b> <span>${NV.esc(item.body)}</span> <time>${time}</time>`;
     chatMessages.appendChild(el);
     chatMessages.scrollTop = chatMessages.scrollHeight;
-    if (item.id && item.id > lastMessageId) lastMessageId = item.id;
+    if (messageId) {
+      renderedMessageIds.add(messageId);
+      lastMessageId = Math.max(lastMessageId, messageId);
+    }
   }
 
   async function pollMessages(roomId) {
     try {
-      const res = await fetch(`/api/live/rooms/${encodeURIComponent(roomId)}/messages`);
+      const cursor = lastMessageId ? `?after=${lastMessageId}` : '';
+      const res = await fetch(`/api/live/rooms/${encodeURIComponent(roomId)}/messages${cursor}`);
       if (res.ok) {
         const data = await res.json();
         const newMessages = (data.messages || []).filter(m => m.id > lastMessageId);
         newMessages.forEach(addChatMessage);
+      } else {
+        console.error('Could not load live chat messages:', res.status, await res.text());
       }
-    } catch (e) {}
+    } catch (error) {
+      console.error('Could not poll live chat messages:', error);
+    }
   }
 
   async function pollReactions(roomId) {
@@ -220,53 +232,124 @@ NV.pages.live = async function () {
 
     videoContainer.replaceChildren();
 
-    if (stream.room_type === 'audio') {
-      renderAudioStage(stream, host);
+    try {
+      if (!window.AgoraRTC) throw new Error('The live streaming service could not be loaded. Refresh and try again.');
+      message.textContent = host ? 'Starting your broadcast…' : 'Connecting to the live broadcast…';
+      message.hidden = false;
+      const tokenResponse = await fetch(`/api/live/rooms/${encodeURIComponent(stream.id)}/token`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: host ? 'publisher' : 'subscriber' })
+      });
+      const tokenData = await tokenResponse.json().catch(() => ({}));
+      if (!tokenResponse.ok) throw new Error(tokenData.error?.message || 'Could not get access to this live room.');
+
+      agoraClient = window.AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
+      await agoraClient.setClientRole(host ? 'host' : 'audience');
+      let tokenRenewalInProgress = false;
+      const renewAgoraToken = async () => {
+        if (tokenRenewalInProgress || !agoraClient || !tokenData.token) return;
+        tokenRenewalInProgress = true;
+        try {
+          const response = await fetch(`/api/live/rooms/${encodeURIComponent(stream.id)}/token`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uid: tokenData.uid })
+          });
+          const renewed = await response.json().catch(() => ({}));
+          if (!response.ok || !renewed.token) throw new Error(renewed.error?.message || 'Could not renew the live connection.');
+          await agoraClient.renewToken(renewed.token);
+        } catch (error) {
+          console.error('Could not renew the Agora live token:', error);
+          showNotice('Your live connection is expiring. Please leave and rejoin the room.');
+        } finally {
+          tokenRenewalInProgress = false;
+        }
+      };
+      agoraClient.on('token-privilege-will-expire', renewAgoraToken);
+      agoraClient.on('token-privilege-did-expire', renewAgoraToken);
+      agoraClient.on('user-published', async (remoteUser, mediaType) => {
+        try {
+          await agoraClient.subscribe(remoteUser, mediaType);
+          if (mediaType === 'video' && remoteUser.videoTrack) {
+            videoContainer.replaceChildren();
+            message.hidden = true;
+            remoteUser.videoTrack.play(videoContainer);
+          } else if (mediaType === 'audio' && remoteUser.audioTrack) {
+            remoteUser.audioTrack.play();
+            if (stream.room_type === 'audio') message.hidden = true;
+          }
+        } catch (error) {
+          console.error('Could not play a live participant track:', error);
+          showNotice('A live audio or video track could not be played. Check your connection and browser permissions.');
+        }
+      });
+      agoraClient.on('user-unpublished', remoteUser => {
+        if (remoteUser.videoTrack) remoteUser.videoTrack.stop();
+        if (currentRoom && !host && stream.room_type !== 'audio') {
+          videoContainer.replaceChildren();
+          message.textContent = 'The broadcaster paused their video.';
+          message.hidden = false;
+        }
+      });
+      agoraClient.on('user-left', () => {
+        if (!host) {
+          videoContainer.replaceChildren();
+          if (stream.room_type === 'audio') renderAudioStage(stream, false);
+          message.textContent = 'The broadcaster has disconnected.';
+          message.hidden = false;
+        }
+      });
+      await agoraClient.join(tokenData.appId, tokenData.channelName, tokenData.token || null, tokenData.uid);
+
+      if (host) {
+        const audioTrack = await window.AgoraRTC.createMicrophoneAudioTrack();
+        localAgoraTracks = [audioTrack];
+        if (stream.room_type !== 'audio') {
+          const videoTrack = await window.AgoraRTC.createCameraVideoTrack();
+          localAgoraTracks.push(videoTrack);
+        }
+        await agoraClient.publish(localAgoraTracks);
+        if (stream.room_type === 'audio') {
+          renderAudioStage(stream, true);
+        } else {
+          videoContainer.replaceChildren();
+          localAgoraTracks.find(track => track.trackMediaType === 'video').play(videoContainer);
+        }
+        message.hidden = true;
+      } else if (stream.room_type === 'audio') {
+        renderAudioStage(stream, false);
+      }
+      hideNotice();
+    } catch (error) {
+      console.error('Could not join Agora live room:', error);
+      if (agoraClient) {
+        try { await agoraClient.leave(); } catch (leaveError) { console.error('Could not leave the failed live connection:', leaveError); }
+        agoraClient = null;
+      }
+      localAgoraTracks.forEach(track => track.close());
+      localAgoraTracks = [];
+      currentRoom = null;
+      room.hidden = true;
+      liveLayout?.classList.remove('has-room');
       if (host) {
         try {
-          localMediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          showNotice('Microphone preview is local to this device. Agora must be configured before viewers can hear this room.');
-        } catch (error) {
-          console.error('Could not access the microphone for this audio room:', error);
-          showNotice('Microphone access was denied or unavailable. Check your browser permissions and try again.');
+          await fetch(`/api/live/rooms/${encodeURIComponent(stream.id)}/end`, { method: 'POST', credentials: 'same-origin' });
+        } catch (endError) {
+          console.error('Could not close the live room after broadcast startup failed:', endError);
         }
       }
-    } else {
-      if (host) {
-        message.textContent = 'Connecting camera…';
-        message.hidden = false;
-        try {
-          localMediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-          const vidEl = document.createElement('video');
-          vidEl.autoplay = true;
-          vidEl.playsInline = true;
-          vidEl.muted = true;
-          vidEl.srcObject = localMediaStream;
-          vidEl.style.width = '100%';
-          vidEl.style.height = '100%';
-          vidEl.style.objectFit = 'cover';
-          videoContainer.appendChild(vidEl);
-          message.textContent = 'Local camera preview. Agora must be configured before viewers can watch.';
-          message.hidden = false;
-          showNotice('Camera preview is local to this device. Agora must be configured before viewers can watch this room.');
-        } catch (error) {
-          console.error('Could not access the camera and microphone for this live room:', error);
-          message.textContent = 'Camera or microphone access was denied or unavailable.';
-          message.hidden = false;
-          showNotice('Allow camera and microphone access in your browser settings, then try again.');
-        }
-      } else {
-        // Viewer viewing a video stream
-        const unavailable = document.createElement('div');
-        unavailable.className = 'live-player-unavailable';
-        unavailable.innerHTML = `<span>${NV.icon(stream.room_type === 'audio' ? 'mic' : 'video')}</span><h3>${NV.esc(stream.title)}</h3><p>Live playback requires the streaming service to be configured.</p>`;
-        videoContainer.appendChild(unavailable);
-      }
+      showNotice(error.message || 'Could not join the live stream.');
+      await loadStreams();
+      return;
     }
 
     // Load initial chat
     if (chatMessages) chatMessages.replaceChildren();
     lastMessageId = 0;
+    renderedMessageIds.clear();
     lastReactionId = 0;
     await pollMessages(stream.id);
 
@@ -321,10 +404,16 @@ NV.pages.live = async function () {
       console.error('Could not clear the live viewer presence:', error);
     }
 
-    if (localMediaStream) {
-      localMediaStream.getTracks().forEach(t => t.stop());
-      localMediaStream = null;
+    if (agoraClient) {
+      try {
+        await agoraClient.leave();
+      } catch (error) {
+        console.error('Could not leave the Agora live room:', error);
+      }
+      agoraClient = null;
     }
+    localAgoraTracks.forEach(track => track.close());
+    localAgoraTracks = [];
 
     videoContainer.replaceChildren();
     room.hidden = true;
@@ -348,10 +437,18 @@ NV.pages.live = async function () {
   // Broadcaster Toggle Mic & Cam
   const micBtn = NV.$('#toggle-mic');
   if (micBtn) {
-    micBtn.addEventListener('click', () => {
-      if (!localMediaStream) return;
+    micBtn.addEventListener('click', async () => {
+      const track = localAgoraTracks.find(item => item.trackMediaType === 'audio');
+      if (!track) return;
       isMicMuted = !isMicMuted;
-      localMediaStream.getAudioTracks().forEach(t => t.enabled = !isMicMuted);
+      try {
+        await track.setEnabled(!isMicMuted);
+      } catch (error) {
+        isMicMuted = !isMicMuted;
+        NV.toast('Could not change the microphone state.', 'error');
+        console.error('Could not toggle the live microphone:', error);
+        return;
+      }
       micBtn.innerHTML = `${NV.icon(isMicMuted ? 'micOff' : 'mic')}<span>${isMicMuted ? 'Mic muted' : 'Mic on'}</span>`;
       micBtn.setAttribute('aria-pressed', String(isMicMuted));
       micBtn.title = isMicMuted ? 'Unmute microphone' : 'Mute microphone';
@@ -361,10 +458,18 @@ NV.pages.live = async function () {
 
   const camBtn = NV.$('#toggle-cam');
   if (camBtn) {
-    camBtn.addEventListener('click', () => {
-      if (!localMediaStream) return;
+    camBtn.addEventListener('click', async () => {
+      const track = localAgoraTracks.find(item => item.trackMediaType === 'video');
+      if (!track) return;
       isCamOff = !isCamOff;
-      localMediaStream.getVideoTracks().forEach(t => t.enabled = !isCamOff);
+      try {
+        await track.setEnabled(!isCamOff);
+      } catch (error) {
+        isCamOff = !isCamOff;
+        NV.toast('Could not change the camera state.', 'error');
+        console.error('Could not toggle the live camera:', error);
+        return;
+      }
       camBtn.innerHTML = `${NV.icon(isCamOff ? 'videoOff' : 'video')}<span>${isCamOff ? 'Camera off' : 'Camera on'}</span>`;
       camBtn.setAttribute('aria-pressed', String(isCamOff));
       camBtn.title = isCamOff ? 'Turn camera on' : 'Turn camera off';
@@ -430,7 +535,7 @@ NV.pages.live = async function () {
       }
       startDialog.close();
       startForm.reset();
-      NV.toast('Live room created. Camera and microphone streaming requires Agora setup.', 'info');
+      NV.toast('Live room created. Connecting to your broadcast…', 'info');
       await joinRoom(data.room, true);
       await loadStreams();
     } catch (err) {
@@ -496,9 +601,7 @@ NV.pages.live = async function () {
   NV.$('#refresh-live').addEventListener('click', loadStreams);
 
   window.addEventListener('beforeunload', () => {
-    if (localMediaStream) {
-      localMediaStream.getTracks().forEach(t => t.stop());
-    }
+    localAgoraTracks.forEach(track => track.close());
     if (currentRoom) {
       fetch(`/api/live/rooms/${encodeURIComponent(currentRoom.id)}/viewer`, {
         method: 'DELETE',

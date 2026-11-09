@@ -1,6 +1,7 @@
 const productCard = (p) => {
   const imgSrc = p.image ? NV.url(p.image) : '';
   const stateBadge = p.state ? `<span class="badge" style="font-size:11px;background:rgba(11,143,62,0.1);color:var(--green-dark);border-radius:10px;padding:2px 8px">${NV.esc(p.state)}</span>` : '';
+  const listedDate = p.created_at != null && Number.isFinite(Number(p.created_at)) ? new Date(Number(p.created_at)).toLocaleDateString() : '';
   return `<article class="card product-card" style="display:flex;flex-direction:column;border-radius:12px;overflow:hidden">
     <div class="pic" data-image-query="${NV.esc(`${p.name} ${p.seller} Nigeria`)}" data-image-fallback="Nigerian food" style="position:relative;background:#f0f2f0">
       ${imgSrc ? `<img src="${imgSrc}" alt="${NV.esc(p.name)}" style="width:100%;height:100%;object-fit:cover">` : ''}
@@ -19,6 +20,7 @@ const productCard = (p) => {
           ${NV.icon('cart')} Add
         </button>
       </div>
+      <small class="muted" style="font-size:11px;margin-top:8px">Seller-listed${listedDate ? ` · ${NV.esc(listedDate)}` : ''} · Confirm price with seller</small>
     </div>
   </article>`;
 };
@@ -168,6 +170,7 @@ NV.pages.product = async function () {
       <h1 style="font-size:26px;margin:4px 0">${NV.esc(p.name)}</h1>
       <p class="muted" style="margin:4px 0 14px">Sold by <b>${NV.esc(p.seller)}</b></p>
       <p class="price" style="font-size:28px;font-weight:700;color:var(--green-dark);margin:10px 0">${NV.money(p.price)}</p>
+      <p class="muted" style="font-size:12px;margin:0 0 12px">Seller-listed price${p.created_at != null && Number.isFinite(Number(p.created_at)) ? ` · Listed ${NV.esc(new Date(Number(p.created_at)).toLocaleDateString())}` : ''}. Confirm availability and price with the seller before ordering; this is not an official market-price index.</p>
       <p style="line-height:1.6;margin:12px 0">${NV.esc(p.description || 'Authentic Nigerian creation. Made and sold with pride by verified local creators.')}</p>
       <p class="muted" style="font-size:13px;margin:4px 0 18px">Stock available: <b>${p.stock || 25} units</b> · Delivery available across Nigeria</p>
       <div style="display:flex;gap:12px;flex-wrap:wrap">

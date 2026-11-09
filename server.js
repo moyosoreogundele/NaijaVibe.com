@@ -6,13 +6,20 @@ const path = require('node:path');
 const express = require('express');
 const Database = require('better-sqlite3');
 const { rateLimit } = require('express-rate-limit');
+const { RtcRole, RtcTokenBuilder } = require('agora-access-token');
+const webPushModule = require('web-push');
 const states = require('./data/states.json');
 
+let webPush = webPushModule;
+let pushPublicKey = null;
+let pushPrivateKey = null;
 const ROOT = __dirname;
 const PRIVATE_DIR = path.join(ROOT, '.private');
-const DB_PATH = process.env.AUTH_DB_PATH || path.join(PRIVATE_DIR, 'auth.sqlite');
+const RAILWAY_VOLUME_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH;
+const DB_PATH = process.env.AUTH_DB_PATH || path.join(RAILWAY_VOLUME_DIR || PRIVATE_DIR, 'auth.sqlite');
 const UPLOAD_DIR = path.join(path.dirname(DB_PATH), 'uploads');
 const SESSION_COOKIE = 'nv_session';
+const DEFAULT_AGORA_APP_ID = '569762c4c1444c27b3b6f0669a3a21c9';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const RESET_TTL_MS = 30 * 60 * 1000;
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -83,6 +90,13 @@ db.exec(`
     PRIMARY KEY (post_id, viewer_hash, viewed_on)
   );
   CREATE INDEX IF NOT EXISTS video_views_post_viewed ON video_views(post_id, viewed_at DESC);
+  CREATE TABLE IF NOT EXISTS post_likes (
+    post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (post_id, user_id)
+  );
+  CREATE INDEX IF NOT EXISTS post_likes_post_idx ON post_likes(post_id);
   CREATE INDEX IF NOT EXISTS sessions_user_id ON sessions(user_id);
   CREATE TABLE IF NOT EXISTS password_resets (
     token_hash TEXT PRIMARY KEY,
@@ -118,6 +132,50 @@ db.exec(`
     created_at INTEGER NOT NULL,
     PRIMARY KEY (follower_id, following_id)
   );
+  CREATE TABLE IF NOT EXISTS direct_conversations (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_one_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_two_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE (user_one_id, user_two_id),
+    CHECK (user_one_id < user_two_id)
+  );
+  CREATE TABLE IF NOT EXISTS direct_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id TEXT NOT NULL REFERENCES direct_conversations(id) ON DELETE CASCADE,
+    sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    body TEXT NOT NULL CHECK (length(body) BETWEEN 1 AND 2000),
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS user_presence (
+    user_id TEXT PRIMARY KEY NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    last_seen_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipient_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    actor_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    type TEXT NOT NULL,
+    text TEXT NOT NULL,
+    url TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    read_at INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    endpoint TEXT NOT NULL UNIQUE,
+    subscription_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS direct_messages_conversation_idx ON direct_messages(conversation_id, id DESC);
+  CREATE INDEX IF NOT EXISTS direct_conversations_updated_idx ON direct_conversations(updated_at DESC);
+  CREATE INDEX IF NOT EXISTS notifications_recipient_created_idx ON notifications(recipient_id, created_at DESC);
 
   CREATE TABLE IF NOT EXISTS businesses (
     id TEXT PRIMARY KEY NOT NULL,
@@ -203,6 +261,32 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS live_viewers_room_seen_idx ON live_viewers(room_id, last_seen_at);
 `);
+const configuredVapidPublicKey = process.env.WEB_PUSH_VAPID_PUBLIC_KEY;
+const configuredVapidPrivateKey = process.env.WEB_PUSH_VAPID_PRIVATE_KEY;
+if (Boolean(configuredVapidPublicKey) !== Boolean(configuredVapidPrivateKey)) {
+  throw new Error('WEB_PUSH_VAPID_PUBLIC_KEY and WEB_PUSH_VAPID_PRIVATE_KEY must be configured together.');
+}
+if (configuredVapidPublicKey && configuredVapidPrivateKey) {
+  pushPublicKey = configuredVapidPublicKey;
+  pushPrivateKey = configuredVapidPrivateKey;
+} else {
+  const savedVapidKeys = db.prepare('SELECT value FROM app_settings WHERE key = ?').get('web_push_vapid_keys');
+  if (savedVapidKeys) {
+    const keys = JSON.parse(savedVapidKeys.value);
+    pushPublicKey = keys.publicKey;
+    pushPrivateKey = keys.privateKey;
+  } else {
+    const keys = webPush.generateVAPIDKeys();
+    pushPublicKey = keys.publicKey;
+    pushPrivateKey = keys.privateKey;
+    db.prepare('INSERT INTO app_settings (key, value) VALUES (?, ?)').run('web_push_vapid_keys', JSON.stringify(keys));
+  }
+}
+webPush.setVapidDetails(
+  process.env.WEB_PUSH_CONTACT || 'mailto:webpush@naijavibe.app',
+  pushPublicKey,
+  pushPrivateKey
+);
 if (!db.pragma('table_info(posts)').some(column => column.name === 'external_video_url')) {
   db.exec('ALTER TABLE posts ADD COLUMN external_video_url TEXT');
 }
@@ -280,7 +364,17 @@ function fail(res, status, code, message, details = {}) {
 app.get('/api/health', (_req, res) => {
   try {
     db.prepare('SELECT 1').get();
-    res.json({ status: 'ok' });
+    const appId = process.env.AGORA_APP_ID || (process.env.AGORA_APP_CERTIFICATE ? '' : DEFAULT_AGORA_APP_ID);
+    const liveConfigured = /^[a-f0-9]{32}$/i.test(appId);
+    res.json({
+      status: 'ok',
+      services: {
+        emailConfigured: Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL),
+        liveConfigured,
+        liveTokenMode: liveConfigured ? (process.env.AGORA_APP_CERTIFICATE ? 'token' : 'tokenless') : 'unconfigured',
+        persistentStorageConfigured: Boolean(process.env.AUTH_DB_PATH || RAILWAY_VOLUME_DIR)
+      }
+    });
   } catch (error) {
     console.error('Application health check failed:', error);
     fail(res, 503, 'SERVICE_UNAVAILABLE', 'The application database is unavailable.');
@@ -398,6 +492,13 @@ const newsCommentLimiter = rateLimit({
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { error: { code: 'RATE_LIMITED', message: 'Too many comments. Please wait and try again.' } }
+});
+const liveTokenLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 60,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many live token requests. Please wait and try again.' } }
 });
 
 app.use('/api/auth', (req, res, next) => {
@@ -890,7 +991,14 @@ async function sendEmail({ to, subject, html, text }) {
     error.code = 'EMAIL_NOT_CONFIGURED';
     throw error;
   }
-  const from = `${appName} <${fromAddress}>`;
+  const senderMatch = fromAddress.trim().match(/^(?:[^<>]+)\s*<([^<>]+)>$/);
+  const senderEmail = (senderMatch ? senderMatch[1] : fromAddress).trim();
+  if (!/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(senderEmail) || /[\r\n]/.test(fromAddress)) {
+    const error = new Error('RESEND_FROM_EMAIL must be a sender email address or a display name followed by an email address.');
+    error.code = 'EMAIL_SENDER_INVALID';
+    throw error;
+  }
+  const from = senderMatch ? fromAddress.trim() : `${appName} <${senderEmail}>`;
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
@@ -958,6 +1066,47 @@ function currentUser(req) {
     WHERE sessions.token_hash = ? AND sessions.expires_at > ?
   `).get(hashSecret(token), Date.now());
   return row || null;
+}
+
+function createNotification(recipientId, actorId, type, text, url) {
+  if (!recipientId || recipientId === actorId) return;
+  const createdAt = Date.now();
+  db.prepare(`
+    INSERT INTO notifications (recipient_id, actor_id, type, text, url, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(recipientId, actorId || null, type, text.slice(0, 300), url, createdAt);
+
+  if (!webPush || !pushPublicKey || !pushPrivateKey) return;
+  const profile = db.prepare('SELECT settings_json FROM profiles WHERE user_id = ?').get(recipientId);
+  let settings = { notif_push: true };
+  if (profile?.settings_json) {
+    try { settings = Object.assign(settings, JSON.parse(profile.settings_json)); } catch (error) {
+      console.error('Could not read notification settings:', error);
+    }
+  }
+  if (!settings.notif_push) return;
+
+  const subscriptions = db.prepare('SELECT id, subscription_json FROM push_subscriptions WHERE user_id = ?').all(recipientId);
+  for (const row of subscriptions) {
+    let subscription;
+    try {
+      subscription = JSON.parse(row.subscription_json);
+    } catch (error) {
+      console.error('Could not read a saved push subscription:', error);
+      continue;
+    }
+    webPush.sendNotification(subscription, JSON.stringify({
+      title: 'NaijaVibe',
+      body: text.slice(0, 180),
+      url
+    })).catch(error => {
+      if (error.statusCode === 404 || error.statusCode === 410) {
+        db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(row.id);
+        return;
+      }
+      console.error('Could not send a push notification:', error);
+    });
+  }
 }
 
 function withNewsReactions(req, items) {
@@ -1077,7 +1226,8 @@ function publicPost(row) {
     video_url: row.video_url,
     external_video_url: row.external_video_url || null,
     views: Number(row.views) || 0,
-    likes: 0,
+    likes: Number(row.likes_count || row.likes) || 0,
+    liked: Boolean(row.liked_by_me),
     comments: [],
     created_at: new Date(row.created_at).toISOString(),
     when: new Date(row.created_at).toLocaleString()
@@ -1161,8 +1311,8 @@ app.get('/api/posts', (req, res) => {
   const limit = Number.isInteger(requestedLimit) ? Math.max(1, Math.min(requestedLimit, 100)) : 20;
   if (category && !POST_CATEGORIES.has(category)) return fail(res, 400, 'INVALID_CATEGORY', 'Choose a valid post category.');
   const rows = category
-    ? db.prepare(`SELECT posts.*, users.username FROM posts JOIN users ON users.id = posts.user_id WHERE posts.category = ? ORDER BY posts.created_at DESC, posts.id DESC LIMIT ?`).all(category, limit)
-    : db.prepare(`SELECT posts.*, users.username FROM posts JOIN users ON users.id = posts.user_id ORDER BY posts.created_at DESC, posts.id DESC LIMIT ?`).all(limit);
+    ? db.prepare(`SELECT posts.*, users.username, (SELECT COUNT(*) FROM post_likes WHERE post_id = posts.id) AS likes_count FROM posts JOIN users ON users.id = posts.user_id WHERE posts.category = ? ORDER BY posts.created_at DESC, posts.id DESC LIMIT ?`).all(category, limit)
+    : db.prepare(`SELECT posts.*, users.username, (SELECT COUNT(*) FROM post_likes WHERE post_id = posts.id) AS likes_count FROM posts JOIN users ON users.id = posts.user_id ORDER BY posts.created_at DESC, posts.id DESC LIMIT ?`).all(limit);
   res.json({ items: rows.map(publicPost) });
 });
 
@@ -1256,9 +1406,12 @@ app.get('/api/videos/trending', async (req, res) => {
     }
     : await getYouTubeTrending(Math.min(50, limit));
   const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const viewerId = currentUser(req)?.id || '';
   const rows = state
     ? db.prepare(`
-      SELECT posts.*, users.username, COUNT(video_views.post_id) AS views
+      SELECT posts.*, users.username, COUNT(video_views.post_id) AS views,
+        (SELECT COUNT(*) FROM post_likes WHERE post_id = posts.id) AS likes_count,
+        EXISTS (SELECT 1 FROM post_likes WHERE post_id = posts.id AND user_id = ?) AS liked_by_me
       FROM posts
       JOIN users ON users.id = posts.user_id
       LEFT JOIN video_views ON video_views.post_id = posts.id AND video_views.viewed_at >= ?
@@ -1267,9 +1420,11 @@ app.get('/api/videos/trending', async (req, res) => {
       GROUP BY posts.id
       ORDER BY views DESC, posts.created_at DESC, posts.id DESC
       LIMIT ?
-    `).all(cutoff, state, limit)
+    `).all(viewerId, cutoff, state, limit)
     : db.prepare(`
-      SELECT posts.*, users.username, COUNT(video_views.post_id) AS views
+      SELECT posts.*, users.username, COUNT(video_views.post_id) AS views,
+        (SELECT COUNT(*) FROM post_likes WHERE post_id = posts.id) AS likes_count,
+        EXISTS (SELECT 1 FROM post_likes WHERE post_id = posts.id AND user_id = ?) AS liked_by_me
       FROM posts
       JOIN users ON users.id = posts.user_id
       LEFT JOIN video_views ON video_views.post_id = posts.id AND video_views.viewed_at >= ?
@@ -1278,7 +1433,7 @@ app.get('/api/videos/trending', async (req, res) => {
       GROUP BY posts.id
       ORDER BY views DESC, posts.created_at DESC, posts.id DESC
       LIMIT ?
-    `).all(cutoff, Math.max(0, limit - youtube.items.length));
+    `).all(viewerId, cutoff, Math.max(0, limit - youtube.items.length));
   res.json({
     items: [...youtube.items, ...rows.map(publicPost)].slice(0, limit),
     sources: { youtube: youtube.source }
@@ -1290,7 +1445,9 @@ app.get('/api/videos/:id', (req, res) => {
   if (!/^[a-f0-9-]{36}$/i.test(id)) return fail(res, 400, 'INVALID_VIDEO_ID', 'The video identifier is invalid.');
   const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const video = db.prepare(`
-    SELECT posts.*, users.username, COUNT(video_views.post_id) AS views
+    SELECT posts.*, users.username, COUNT(video_views.post_id) AS views,
+      (SELECT COUNT(*) FROM post_likes WHERE post_id = posts.id) AS likes_count,
+      EXISTS (SELECT 1 FROM post_likes WHERE post_id = posts.id AND user_id = ?) AS liked_by_me
     FROM posts
     JOIN users ON users.id = posts.user_id
     LEFT JOIN video_views ON video_views.post_id = posts.id AND video_views.viewed_at >= ?
@@ -1299,7 +1456,7 @@ app.get('/api/videos/:id', (req, res) => {
       OR posts.external_video_url IS NOT NULL AND posts.external_video_url != ''
     )
     GROUP BY posts.id
-  `).get(cutoff, id);
+  `).get(currentUser(req)?.id || '', cutoff, id);
   if (!video) return fail(res, 404, 'VIDEO_NOT_FOUND', 'This video could not be found.');
   res.json({ video: publicPost(video) });
 });
@@ -1339,6 +1496,29 @@ app.post('/api/videos/:id/views', videoViewLimiter, (req, res) => {
   const cutoff = now - 7 * 24 * 60 * 60 * 1000;
   const result = db.prepare('SELECT COUNT(*) AS views FROM video_views WHERE post_id = ? AND viewed_at >= ?').get(id, cutoff);
   res.json({ counted: inserted.changes === 1, views: result.views });
+});
+
+app.post('/api/videos/:id/like', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to like videos.');
+  const id = req.params.id;
+  const video = db.prepare(`
+    SELECT id, user_id FROM posts
+    WHERE id = ? AND (
+      video_url IS NOT NULL AND video_url != ''
+      OR external_video_url IS NOT NULL AND external_video_url != ''
+    )
+  `).get(id);
+  if (!video) return fail(res, 404, 'VIDEO_NOT_FOUND', 'This video could not be found.');
+  const existing = db.prepare('SELECT 1 FROM post_likes WHERE post_id = ? AND user_id = ?').get(id, user.id);
+  if (existing) {
+    db.prepare('DELETE FROM post_likes WHERE post_id = ? AND user_id = ?').run(id, user.id);
+  } else {
+    db.prepare('INSERT INTO post_likes (post_id, user_id, created_at) VALUES (?, ?, ?)').run(id, user.id, Date.now());
+    createNotification(video.user_id, user.id, 'like', `@${user.username} liked your video.`, `post.html?id=${encodeURIComponent(id)}`);
+  }
+  const likes = db.prepare('SELECT COUNT(*) AS count FROM post_likes WHERE post_id = ?').get(id).count;
+  return res.json({ liked: !existing, likes });
 });
 
 app.post('/api/posts', postCreateLimiter, (req, res) => {
@@ -1423,8 +1603,13 @@ app.post('/api/auth/signup', async (req, res, next) => {
       await sendSignupCode(email, code);
     } catch (error) {
       db.prepare('DELETE FROM pending_signups WHERE email = ?').run(email);
-      const code = error.code === 'EMAIL_NOT_CONFIGURED' ? 'EMAIL_NOT_CONFIGURED' : 'EMAIL_SEND_FAILED';
-      return fail(res, 503, code, 'We could not send your verification email. Please try again later.');
+      const code = ['EMAIL_NOT_CONFIGURED', 'EMAIL_SENDER_INVALID'].includes(error.code) ? error.code : 'EMAIL_SEND_FAILED';
+      const message = error.code === 'EMAIL_NOT_CONFIGURED'
+        ? 'Email verification is not configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL on the server.'
+        : error.code === 'EMAIL_SENDER_INVALID'
+          ? error.message
+          : 'We could not send your verification email. Check the Resend API key and verified sender address.';
+      return fail(res, 503, code, message);
     }
     return res.status(202).json({ verificationRequired: true, email });
   } catch (error) {
@@ -1501,8 +1686,8 @@ app.post('/api/auth/resend-code', async (req, res) => {
   try {
     await sendSignupCode(email, code);
   } catch (error) {
-    if (error.code === 'EMAIL_NOT_CONFIGURED') {
-      return fail(res, 503, 'EMAIL_NOT_CONFIGURED', 'Email verification is not configured. Please contact support.');
+    if (error.code === 'EMAIL_NOT_CONFIGURED' || error.code === 'EMAIL_SENDER_INVALID') {
+      return fail(res, 503, error.code, error.message);
     }
     return fail(res, 503, 'EMAIL_SEND_FAILED', 'We could not send your verification email. Please try again later.');
   }
@@ -1534,6 +1719,113 @@ app.post('/api/auth/login', async (req, res, next) => {
 app.get('/api/auth/me', (req, res) => {
   const user = currentUser(req);
   res.json({ user: user ? publicUser(user) : null });
+});
+
+app.get('/api/notifications', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to view notifications.');
+  const notifications = db.prepare(`
+    SELECT id, type, text, url, created_at, read_at
+    FROM notifications
+    WHERE recipient_id = ?
+    ORDER BY created_at DESC, id DESC
+    LIMIT 50
+  `).all(user.id);
+  return res.json({
+    notifications: notifications.map(item => ({
+      ...item,
+      unread: item.read_at === null,
+      when: new Date(item.created_at).toISOString()
+    }))
+  });
+});
+
+app.patch('/api/notifications/read', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to update notifications.');
+  const now = Date.now();
+  if (Number.isSafeInteger(req.body.id) && req.body.id > 0) {
+    db.prepare('UPDATE notifications SET read_at = ? WHERE id = ? AND recipient_id = ?')
+      .run(now, req.body.id, user.id);
+  } else {
+    db.prepare('UPDATE notifications SET read_at = ? WHERE recipient_id = ? AND read_at IS NULL')
+      .run(now, user.id);
+  }
+  return res.json({ updated: true });
+});
+
+app.get('/api/push/config', (req, res) => {
+  if (!currentUser(req)) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to enable notifications.');
+  if (!webPush || !pushPublicKey) {
+    return fail(res, 503, 'PUSH_NOT_CONFIGURED', 'Push notifications are not configured on this server yet.');
+  }
+  return res.json({ publicKey: pushPublicKey });
+});
+
+app.post('/api/push/subscriptions', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to enable notifications.');
+  const subscription = req.body.subscription;
+  if (!subscription || typeof subscription !== 'object' ||
+      typeof subscription.endpoint !== 'string' ||
+      !subscription.keys || typeof subscription.keys.p256dh !== 'string' ||
+      typeof subscription.keys.auth !== 'string') {
+    return fail(res, 400, 'INVALID_SUBSCRIPTION', 'The browser notification subscription is invalid.');
+  }
+  let endpoint;
+  try {
+    endpoint = new URL(subscription.endpoint);
+    const host = endpoint.hostname.toLowerCase();
+    const supportedPushHost = [
+      'fcm.googleapis.com',
+      'push.services.mozilla.com',
+      'web.push.apple.com',
+      'notify.windows.com'
+    ].some(domain => host === domain || host.endsWith(`.${domain}`));
+    if (endpoint.protocol !== 'https:' || !supportedPushHost ||
+        (endpoint.port && endpoint.port !== '443') || endpoint.username || endpoint.password) {
+      throw new Error('Unsupported push endpoint.');
+    }
+  } catch {
+    return fail(res, 400, 'INVALID_SUBSCRIPTION', 'The browser notification service is not supported.');
+  }
+  if (subscription.endpoint.length > 2048 || subscription.keys.p256dh.length > 256 || subscription.keys.auth.length > 256) {
+    return fail(res, 400, 'INVALID_SUBSCRIPTION', 'The browser notification subscription is too large.');
+  }
+  const value = JSON.stringify({
+    endpoint: endpoint.href,
+    keys: { p256dh: subscription.keys.p256dh, auth: subscription.keys.auth }
+  });
+  db.prepare(`
+    INSERT INTO push_subscriptions (user_id, endpoint, subscription_json, created_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(endpoint) DO UPDATE SET
+      user_id = excluded.user_id,
+      subscription_json = excluded.subscription_json,
+      created_at = excluded.created_at
+  `).run(user.id, endpoint.href, value, Date.now());
+  const profile = getOrCreateProfile(user.id, user.username);
+  let settings = { notif_email: true, notif_push: true, private: false };
+  if (profile.settings_json) {
+    try { settings = Object.assign(settings, JSON.parse(profile.settings_json)); } catch (error) {
+      console.error('Could not read notification settings while enabling push:', error);
+    }
+  }
+  settings.notif_push = true;
+  db.prepare('UPDATE profiles SET settings_json = ?, updated_at = ? WHERE user_id = ?')
+    .run(JSON.stringify(settings), Date.now(), user.id);
+  return res.json({ subscribed: true });
+});
+
+app.delete('/api/push/subscriptions', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to update notifications.');
+  if (typeof req.body.endpoint !== 'string') {
+    return fail(res, 400, 'INVALID_SUBSCRIPTION', 'The browser notification endpoint is invalid.');
+  }
+  db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?')
+    .run(user.id, req.body.endpoint);
+  return res.json({ unsubscribed: true });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -1656,6 +1948,49 @@ app.get('/api/users/:username/profile', (req, res) => {
   });
 });
 
+app.get('/api/users/search', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to search for people.');
+  const search = typeof req.query.q === 'string' ? req.query.q.trim().replace(/^@/, '') : '';
+  if (search.length < 2 || search.length > 40) {
+    return fail(res, 400, 'INVALID_SEARCH', 'Enter at least 2 and no more than 40 characters.');
+  }
+  const escaped = search.replace(/[\\%_]/g, '\\$&').toLowerCase();
+  const users = db.prepare(`
+    SELECT users.id, users.username, profiles.display_name, profiles.avatar_url, profiles.state,
+      COALESCE(user_presence.last_seen_at, 0) AS last_seen_at
+    FROM users
+    LEFT JOIN profiles ON profiles.user_id = users.id
+    LEFT JOIN user_presence ON user_presence.user_id = users.id
+    WHERE users.id <> ? AND (
+      LOWER(users.username) LIKE ? ESCAPE '\\' OR LOWER(COALESCE(profiles.display_name, '')) LIKE ? ESCAPE '\\'
+    )
+    ORDER BY CASE WHEN LOWER(users.username) = ? THEN 0 ELSE 1 END, users.username COLLATE NOCASE
+    LIMIT 20
+  `).all(user.id, `%${escaped}%`, `%${escaped}%`, search.toLowerCase());
+  const onlineAfter = Date.now() - 2 * 60 * 1000;
+  return res.json({
+    users: users.map(result => ({
+      id: result.id,
+      username: result.username,
+      display_name: result.display_name || result.username,
+      avatar_url: result.avatar_url || 'assets/images/avatar-1.jpg',
+      state: result.state || '',
+      online: result.last_seen_at >= onlineAfter
+    }))
+  });
+});
+
+app.post('/api/users/presence', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to update online status.');
+  db.prepare(`
+    INSERT INTO user_presence (user_id, last_seen_at) VALUES (?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET last_seen_at = excluded.last_seen_at
+  `).run(user.id, Date.now());
+  return res.json({ online: true });
+});
+
 app.patch('/api/users/profile', (req, res) => {
   const user = currentUser(req);
   if (!user) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to update your profile.');
@@ -1760,9 +2095,127 @@ app.post('/api/users/:username/follow', (req, res) => {
     db.prepare('DELETE FROM user_follows WHERE follower_id = ? AND following_id = ?').run(user.id, targetUser.id);
   } else {
     db.prepare('INSERT INTO user_follows (follower_id, following_id, created_at) VALUES (?, ?, ?)').run(user.id, targetUser.id, Date.now());
+    createNotification(targetUser.id, user.id, 'follow', `@${user.username} started following you.`, `profile.html?user=${encodeURIComponent(targetUser.username)}`);
   }
   const followersCount = db.prepare('SELECT COUNT(*) AS count FROM user_follows WHERE following_id = ?').get(targetUser.id).count;
   res.json({ following: !existing, followersCount });
+});
+
+app.get('/api/messages/conversations', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to view your messages.');
+  const rows = db.prepare(`
+    SELECT c.id, c.updated_at,
+      peer.id AS peer_id, peer.username AS peer_username,
+      COALESCE(profile.display_name, peer.username) AS peer_name,
+      COALESCE(profile.avatar_url, 'assets/images/avatar-1.jpg') AS peer_avatar,
+      COALESCE(presence.last_seen_at, 0) AS peer_last_seen_at,
+      message.body AS last_message, message.created_at AS last_message_at
+    FROM direct_conversations c
+    JOIN users peer ON peer.id = CASE WHEN c.user_one_id = ? THEN c.user_two_id ELSE c.user_one_id END
+    LEFT JOIN profiles profile ON profile.user_id = peer.id
+    LEFT JOIN user_presence presence ON presence.user_id = peer.id
+    LEFT JOIN direct_messages message ON message.id = (
+      SELECT id FROM direct_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1
+    )
+    WHERE c.user_one_id = ? OR c.user_two_id = ?
+    ORDER BY COALESCE(message.created_at, c.updated_at) DESC
+    LIMIT 100
+  `).all(user.id, user.id, user.id);
+  const onlineAfter = Date.now() - 2 * 60 * 1000;
+  return res.json({
+    conversations: rows.map(row => ({
+      id: row.id,
+      updated_at: row.updated_at,
+      last_message: row.last_message || '',
+      last_message_at: row.last_message_at || row.updated_at,
+      peer: {
+        id: row.peer_id,
+        username: row.peer_username,
+        display_name: row.peer_name,
+        avatar_url: row.peer_avatar,
+        online: row.peer_last_seen_at >= onlineAfter
+      }
+    }))
+  });
+});
+
+app.post('/api/messages/conversations', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to start a conversation.');
+  const recipientId = typeof req.body.user_id === 'string' ? req.body.user_id : '';
+  if (!recipientId) return fail(res, 400, 'INVALID_RECIPIENT', 'Choose someone to message.');
+  if (recipientId === user.id) return fail(res, 400, 'INVALID_RECIPIENT', 'You cannot message yourself.');
+  const recipient = db.prepare(`
+    SELECT users.id, users.username, profiles.display_name, profiles.avatar_url, profiles.state,
+      COALESCE(user_presence.last_seen_at, 0) AS last_seen_at
+    FROM users
+    LEFT JOIN profiles ON profiles.user_id = users.id
+    LEFT JOIN user_presence ON user_presence.user_id = users.id
+    WHERE users.id = ?
+  `).get(recipientId);
+  if (!recipient) return fail(res, 404, 'USER_NOT_FOUND', 'That user could not be found.');
+  const [userOneId, userTwoId] = [user.id, recipientId].sort();
+  const createdAt = Date.now();
+  db.prepare(`
+    INSERT INTO direct_conversations (id, user_one_id, user_two_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(user_one_id, user_two_id) DO NOTHING
+  `).run(crypto.randomUUID(), userOneId, userTwoId, createdAt, createdAt);
+  const conversation = db.prepare(
+    'SELECT id FROM direct_conversations WHERE user_one_id = ? AND user_two_id = ?'
+  ).get(userOneId, userTwoId);
+  return res.status(200).json({
+    conversation_id: conversation.id,
+    peer: {
+      id: recipient.id,
+      username: recipient.username,
+      display_name: recipient.display_name || recipient.username,
+      avatar_url: recipient.avatar_url || 'assets/images/avatar-1.jpg',
+      state: recipient.state || '',
+      online: recipient.last_seen_at >= Date.now() - 2 * 60 * 1000
+    }
+  });
+});
+
+app.get('/api/messages/conversations/:id/messages', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to view messages.');
+  const conversation = db.prepare(`
+    SELECT id FROM direct_conversations
+    WHERE id = ? AND (user_one_id = ? OR user_two_id = ?)
+  `).get(req.params.id, user.id, user.id);
+  if (!conversation) return fail(res, 404, 'CONVERSATION_NOT_FOUND', 'Conversation not found.');
+  const rows = db.prepare(`
+    SELECT direct_messages.id, direct_messages.sender_id, direct_messages.body, direct_messages.created_at,
+      users.username
+    FROM direct_messages JOIN users ON users.id = direct_messages.sender_id
+    WHERE direct_messages.conversation_id = ? ORDER BY direct_messages.id DESC LIMIT 100
+  `).all(conversation.id).reverse();
+  return res.json({ messages: rows });
+});
+
+app.post('/api/messages/conversations/:id/messages', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to send messages.');
+  const conversation = db.prepare(`
+    SELECT id, user_one_id, user_two_id FROM direct_conversations
+    WHERE id = ? AND (user_one_id = ? OR user_two_id = ?)
+  `).get(req.params.id, user.id, user.id);
+  if (!conversation) return fail(res, 404, 'CONVERSATION_NOT_FOUND', 'Conversation not found.');
+  const body = typeof req.body.body === 'string' ? req.body.body.trim() : '';
+  if (!body || body.length > 2000) return fail(res, 400, 'INVALID_MESSAGE', 'Messages must be between 1 and 2,000 characters.');
+  const createdAt = Date.now();
+  const result = db.prepare(`
+    INSERT INTO direct_messages (conversation_id, sender_id, body, created_at)
+    VALUES (?, ?, ?, ?)
+  `).run(conversation.id, user.id, body, createdAt);
+  db.prepare('UPDATE direct_conversations SET updated_at = ? WHERE id = ?').run(createdAt, conversation.id);
+  const recipientId = conversation.user_one_id === user.id ? conversation.user_two_id : conversation.user_one_id;
+  createNotification(recipientId, user.id, 'message', `@${user.username} sent you a message.`, `messages.html?conversation=${encodeURIComponent(conversation.id)}`);
+  return res.status(201).json({
+    message: { id: Number(result.lastInsertRowid), sender_id: user.id, username: user.username, body, created_at: createdAt }
+  });
 });
 
 // ==========================================
@@ -2006,6 +2459,60 @@ app.get('/api/live/rooms/:id', (req, res) => {
   });
 });
 
+app.post('/api/live/rooms/:id/token', liveTokenLimiter, (req, res) => {
+  const appCertificate = process.env.AGORA_APP_CERTIFICATE;
+  const appId = process.env.AGORA_APP_ID || (appCertificate ? '' : DEFAULT_AGORA_APP_ID);
+  if (!/^[a-f0-9]{32}$/i.test(appId) ||
+      (appCertificate && !/^(?:[a-f0-9]{32}|[a-f0-9]{64})$/i.test(appCertificate))) {
+    return fail(res, 503, 'LIVE_NOT_CONFIGURED', 'Live streaming credentials are invalid. Please contact support.');
+  }
+  const room = db.prepare('SELECT id, owner_id, status FROM live_rooms WHERE id = ?').get(req.params.id);
+  if (!room || room.status !== 'live') return fail(res, 404, 'ROOM_NOT_FOUND', 'This live room has ended.');
+  const user = currentUser(req);
+  const publisher = Boolean(user && room.owner_id === user.id);
+  const role = publisher ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
+  const requestedUid = req.body.uid;
+  if (requestedUid !== undefined && (!Number.isSafeInteger(requestedUid) || requestedUid < 1 || requestedUid > 2_147_483_647)) {
+    return fail(res, 400, 'INVALID_LIVE_UID', 'The live session identifier is invalid.');
+  }
+  const uid = requestedUid || crypto.randomInt(1, 2_147_483_647);
+  const expiresInSeconds = 60 * 60;
+  const expiresAt = Math.floor(Date.now() / 1000) + expiresInSeconds;
+  if (!appCertificate) {
+    return res.json({
+      appId,
+      channelName: room.id,
+      token: null,
+      uid,
+      role: publisher ? 'publisher' : 'subscriber',
+      expiresInSeconds,
+      tokenless: true
+    });
+  }
+  try {
+    const token = RtcTokenBuilder.buildTokenWithUid(
+      appId,
+      appCertificate,
+      room.id,
+      uid,
+      role,
+      expiresAt
+    );
+    return res.json({
+      appId,
+      channelName: room.id,
+      token,
+      uid,
+      role: publisher ? 'publisher' : 'subscriber',
+      expiresInSeconds,
+      tokenless: false
+    });
+  } catch (error) {
+    console.error('Could not generate an Agora live token:', error);
+    return fail(res, 500, 'LIVE_TOKEN_FAILED', 'Could not connect to the live stream. Please try again.');
+  }
+});
+
 app.post('/api/live/rooms', (req, res) => {
   const user = currentUser(req);
   if (!user) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to start a live broadcast.');
@@ -2057,15 +2564,30 @@ app.post('/api/live/rooms/:id/end', (req, res) => {
 });
 
 app.get('/api/live/rooms/:id/messages', (req, res) => {
-  const rows = db.prepare(`
-    SELECT live_chat_messages.*, users.username, profiles.display_name, profiles.avatar_url
-    FROM live_chat_messages
-    LEFT JOIN users ON users.id = live_chat_messages.user_id
-    LEFT JOIN profiles ON profiles.user_id = live_chat_messages.user_id
-    WHERE live_chat_messages.room_id = ?
-    ORDER BY live_chat_messages.created_at ASC
-    LIMIT 60
-  `).all(req.params.id);
+  const after = req.query.after;
+  let rows;
+  if (after === undefined || after === '') {
+    rows = db.prepare(`
+      SELECT live_chat_messages.*, users.username, profiles.display_name, profiles.avatar_url
+      FROM live_chat_messages
+      LEFT JOIN users ON users.id = live_chat_messages.user_id
+      LEFT JOIN profiles ON profiles.user_id = live_chat_messages.user_id
+      WHERE live_chat_messages.room_id = ?
+      ORDER BY live_chat_messages.id DESC
+      LIMIT 60
+    `).all(req.params.id).reverse();
+  } else {
+    if (!/^\d{1,15}$/.test(String(after))) return fail(res, 400, 'INVALID_MESSAGE_CURSOR', 'The live chat cursor is invalid.');
+    rows = db.prepare(`
+      SELECT live_chat_messages.*, users.username, profiles.display_name, profiles.avatar_url
+      FROM live_chat_messages
+      LEFT JOIN users ON users.id = live_chat_messages.user_id
+      LEFT JOIN profiles ON profiles.user_id = live_chat_messages.user_id
+      WHERE live_chat_messages.room_id = ? AND live_chat_messages.id > ?
+      ORDER BY live_chat_messages.id ASC
+      LIMIT 100
+    `).all(req.params.id, Number(after));
+  }
   res.json({
     messages: rows.map(r => ({
       id: r.id,

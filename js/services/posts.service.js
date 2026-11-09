@@ -116,6 +116,28 @@
       NV.store.set('video-views', viewed);
       return { counted: true, views: count };
     },
+    async likeVideo(id) {
+      if (NV.live) {
+        const user = await NV.services.auth.getUser();
+        if (!user) throw new Error('Sign in to like videos.');
+        const { data: existing, error: lookupError } = await NV.db.from('likes')
+          .select('post_id').eq('post_id', id).eq('user_id', user.id).maybeSingle();
+        if (lookupError) throw lookupError;
+        const change = existing
+          ? await NV.db.from('likes').delete().match({ post_id: id, user_id: user.id })
+          : await NV.db.from('likes').insert({ post_id: id, user_id: user.id });
+        if (change.error) throw change.error;
+        const { count, error: countError } = await NV.db.from('likes')
+          .select('*', { count: 'exact', head: true }).eq('post_id', id);
+        if (countError) throw countError;
+        return { liked: !existing, likes: count || 0 };
+      }
+      return localRequest('/api/videos/' + encodeURIComponent(id) + '/like', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+    },
     async list({ category, limit = 20 } = {}) {
       if (NV.live) { let q = NV.db.from('posts').select('*, profiles(username, avatar_url)').order('created_at', { ascending: false }).limit(limit); if (category) q = q.eq('category', category); const { data } = await q; return data || []; }
       if (!legacyMigration) legacyMigration = migrateLocalPosts();

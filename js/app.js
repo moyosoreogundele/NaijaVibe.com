@@ -6,6 +6,9 @@
     if (NV.supabaseError) NV.toast(NV.supabaseError.message || 'Could not initialize shared Supabase services.', 'error');
     NV.renderHeader(); NV.renderFooter(); NV.renderDrawer();
     NV.navigation.bind(); NV.notifications.refresh();
+    window.setInterval(() => {
+      if (document.visibilityState === 'visible') NV.notifications.refresh();
+    }, 60 * 1000);
     const page = document.body.dataset.page;
     try {
       if (NV.pages[page]) await NV.pages[page]();

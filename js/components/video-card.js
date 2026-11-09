@@ -101,6 +101,7 @@
         ? `<a class="video-card-title" href="${NV.esc(video.external_video_url)}" target="_blank" rel="noopener noreferrer">${NV.esc(video.title || 'Trending Nigerian video')}</a>`
         : `<a class="video-card-title" href="${NV.url('videos/watch.html?id=' + encodeURIComponent(video.id))}">${NV.esc(video.title || 'Nigerian creator video')}</a>`}
       <div class="video-card-meta"><span>${NV.esc(state)}</span><span><b data-video-views>${views.toLocaleString('en-NG')}</b> ${NV.esc(video.view_label || 'views this week')}</span></div>
+      ${video.source === 'youtube' ? '' : `<div class="video-card-actions"><button type="button" data-like-video aria-pressed="${video.liked ? 'true' : 'false'}" class="${video.liked ? 'liked' : ''}">${NV.icon('heart')}<span>Like</span><b data-video-likes>${Number(video.likes) || 0}</b></button></div>`}
       <div class="video-card-creator">${video.source === 'youtube'
         ? (video.channel_url ? `<a href="${NV.esc(video.channel_url)}" target="_blank" rel="noopener noreferrer">${NV.esc(video.user || 'YouTube creator')}</a><span class="video-source">Trending on YouTube</span>` : '<span>Trending on YouTube</span>')
         : username ? `<a href="${NV.url('profile.html?user=' + encodeURIComponent(username))}">@${NV.esc(username)}</a><button type="button" data-follow-creator="${NV.esc(username)}" class="btn btn-outline btn-sm">Follow</button>` : '<span>NaijaVibe creator</span>'}</div>
@@ -127,6 +128,26 @@
         iframe.allowFullscreen = true;
         box.replaceChildren(iframe);
         await recordView(box.closest('[data-video-id]'));
+        return;
+      }
+      const likeButton = event.target.closest('[data-like-video]');
+      if (likeButton && !likeButton.disabled) {
+        likeButton.disabled = true;
+        try {
+          const user = await NV.services.auth.getUser();
+          if (!user) {
+            NV.router.go('login.html?next=' + encodeURIComponent(location.pathname + location.search));
+            return;
+          }
+          const result = await NV.services.posts.likeVideo(likeButton.closest('[data-video-id]').dataset.videoId);
+          likeButton.setAttribute('aria-pressed', String(result.liked));
+          likeButton.classList.toggle('liked', result.liked);
+          NV.$('[data-video-likes]', likeButton).textContent = Number(result.likes).toLocaleString('en-NG');
+        } catch (error) {
+          NV.toast(error.message || 'Could not like this video.', 'error');
+        } finally {
+          likeButton.disabled = false;
+        }
         return;
       }
       const followButton = event.target.closest('[data-follow-creator]');

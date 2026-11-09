@@ -4,7 +4,7 @@
     ['culture','masks','explore.html?cat=culture','Culture'],['events','calendar','events.html','Events'],['marketplace','store','marketplace.html','Shop']
   ];
   const ICON = { map: 'pin' };
-  const MORE = [['Trending','trending.html'],['Businesses','businesses/index.html'],['States','states/index.html'],['Saved','saved.html'],['About','about.html'],['Contact','contact.html']];
+  const MORE = [['Messages','messages.html'],['Trending','trending.html'],['Businesses','businesses/index.html'],['States','states/index.html'],['Saved','saved.html'],['About','about.html'],['Contact','contact.html']];
 
   NV.renderHeader = function () {
     const host = NV.$('#site-header'); if (!host) return;
@@ -19,7 +19,8 @@
           <button type="submit" aria-label="Search">${NV.icon('search')}</button>
         </form>
         <div class="header-actions">
-          <a class="icon-btn" href="${NV.url('notifications.html')}" aria-label="Notifications">${NV.icon('bell')}<span class="badge" data-notif-count>3</span></a>
+          <a class="icon-btn" href="${NV.url('notifications.html')}" aria-label="Notifications">${NV.icon('bell')}<span class="badge" data-notif-count hidden>0</span></a>
+          <a class="icon-btn" href="${NV.url('messages.html')}" aria-label="Messages">${NV.icon('message')}</a>
           <a class="btn btn-primary" href="${NV.url('login.html')}" data-auth="out">Login</a>
           <a class="btn btn-outline" href="${NV.url('signup.html')}" data-auth="out">Sign Up</a>
           <a class="btn btn-outline" href="${NV.url('profile.html')}" data-auth="in" hidden>Profile</a>

@@ -21,6 +21,7 @@
 .video-card-title{display:block;padding:12px 12px 4px;font-size:14px;font-weight:600;line-height:1.45}
 .video-card-title:hover{color:var(--green)}
 .video-card-meta{display:flex;justify-content:space-between;gap:8px;padding:4px 12px;font-size:11px;color:var(--muted)}
+.video-card-actions{padding:3px 12px}.video-card-actions button{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;color:var(--muted);font-size:11px}.video-card-actions button .i{width:14px;height:14px}.video-card-actions button.liked{color:#d92d20;border-color:#d92d20}.video-card-actions button.liked .i{fill:currentColor}.video-card-actions button:disabled{opacity:.6}
 .video-card small{display:block;padding:0 12px;color:var(--muted)}
 .video-card-creator{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px 0}
 .video-card-creator>a{font-size:11px;color:var(--green-dark);font-weight:600}

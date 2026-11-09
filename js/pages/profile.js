@@ -51,11 +51,17 @@ NV.pages.profile = async function () {
   // Actions (Edit vs Follow)
   const editBtn = NV.$('#p-edit-btn');
   const followBtn = NV.$('#p-follow-btn');
+  const messageBtn = NV.$('#p-message-btn');
   if (isOwnProfile) {
     if (editBtn) editBtn.style.display = 'inline-block';
     if (followBtn) followBtn.style.display = 'none';
+    if (messageBtn) messageBtn.hidden = true;
   } else {
     if (editBtn) editBtn.style.display = 'none';
+    if (messageBtn && currentUser) {
+      messageBtn.href = NV.url('messages.html?user=' + encodeURIComponent(profile.username));
+      messageBtn.hidden = false;
+    }
     if (followBtn) {
       followBtn.style.display = 'inline-block';
       followBtn.textContent = profile.isFollowing ? 'Following' : 'Follow';
