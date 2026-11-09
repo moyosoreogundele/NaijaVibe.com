@@ -355,6 +355,8 @@ function getOrCreateProfile(userId, username = '') {
 
 const app = express();
 app.disable('x-powered-by');
+// Trust Railway's single ingress proxy so rate limits use the client IP safely.
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '16kb' }));
 
 function fail(res, status, code, message, details = {}) {

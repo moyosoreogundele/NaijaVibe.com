@@ -390,6 +390,7 @@ test('Feature 3: Live rooms, audio/video streaming, chat messages, and reactions
   const hostToken = await api(`/api/live/rooms/${roomId}/token`, {
     method: 'POST',
     cookie: hostCookie,
+    headers: { 'X-Forwarded-For': '198.51.100.24' },
     body: { role: 'publisher' }
   });
   assert.equal(hostToken.res.status, 200);

@@ -200,6 +200,19 @@ test('signup reports invalid Resend sender configuration without storing an unus
   }
 });
 
+test('authentication endpoints accept requests forwarded by Railway', async () => {
+  const response = await originalFetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Forwarded-For': '198.51.100.23'
+    },
+    body: JSON.stringify({ email: 'unknown@example.com', password: 'some-password' })
+  });
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).error.code, 'INVALID_CREDENTIALS');
+});
+
 test('headline discussions are public to read and require a signed-in account to post', async () => {
   const articleId = '0123456789abcdefabcd';
   let response = await originalFetch(`${baseUrl}/api/news/${articleId}/comments`);
