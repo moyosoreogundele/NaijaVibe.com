@@ -370,6 +370,7 @@ app.get('/api/health', (_req, res) => {
     const liveConfigured = /^[a-f0-9]{32}$/i.test(appId);
     res.json({
       status: 'ok',
+      release: process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown',
       services: {
         emailConfigured: Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL),
         liveConfigured,

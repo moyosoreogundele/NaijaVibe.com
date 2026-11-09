@@ -361,6 +361,7 @@ test('Feature 3: Live rooms, audio/video streaming, chat messages, and reactions
   assert.equal(health.status, 200);
   assert.deepEqual(await health.json(), {
     status: 'ok',
+    release: 'unknown',
     services: {
       emailConfigured: true,
       liveConfigured: true,
