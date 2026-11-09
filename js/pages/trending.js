@@ -6,7 +6,7 @@ NV.pages.saved = async function () {
   const ids = NV.services.posts.savedIds().map(String); const all = await NV.services.posts.list();
   const mine = all.filter(p => ids.includes(String(p.id)));
   const postBox = NV.$('#saved-list');
-  postBox.innerHTML = mine.length ? mine.map(NV.feedPost).join('') : '<p class="empty">No saved community posts yet.</p>';
+  postBox.innerHTML = mine.length ? mine.map(NV.feedPost).join('') : '<p class="empty">No saved posts yet.</p>';
   NV.bindFeed(postBox);
   const newsBox = NV.$('#saved-news-list');
   const savedNews = NV.services.news.saved();
@@ -32,17 +32,17 @@ NV.pages.videos = async function () {
         || `<p class="empty">No videos from ${NV.esc(stateFilter.value || 'Nigeria')} have been shared yet. <a href="${NV.url('create-post.html')}">Share the first video</a>.</p>`;
       NV.bindVideoViews(box);
       const youtubeCount = videos.filter(video => video.source === 'youtube').length;
-      const communityCount = videos.length - youtubeCount;
+      const creatorCount = videos.length - youtubeCount;
       if (youtube.status === 'not_configured') {
-        status.textContent = `${communityCount} NaijaVibe community videos · Add YOUTUBE_API_KEY to the server .env file to show Nigeria-wide YouTube trends.`;
+        status.textContent = `${creatorCount} NaijaVibe creator videos · Add YOUTUBE_API_KEY to the server .env file to show Nigeria-wide YouTube trends.`;
       } else if (youtube.status === 'unavailable') {
-        status.textContent = `YouTube trends are temporarily unavailable. ${communityCount} NaijaVibe community videos are shown when available.`;
+        status.textContent = `YouTube trends are temporarily unavailable. ${creatorCount} NaijaVibe creator videos are shown when available.`;
       } else if (youtube.status === 'stale') {
-        status.textContent = `Showing cached YouTube trends and ${communityCount} NaijaVibe community videos.`;
+        status.textContent = `Showing cached YouTube trends and ${creatorCount} NaijaVibe creator videos.`;
       } else if (youtube.status === 'national_only') {
-        status.textContent = `${communityCount} NaijaVibe videos from ${stateFilter.value}. YouTube trends are Nigeria-wide and appear under All Nigeria.`;
+        status.textContent = `${creatorCount} NaijaVibe videos from ${stateFilter.value}. YouTube trends are Nigeria-wide and appear under All Nigeria.`;
       } else {
-        status.textContent = `${youtubeCount} trending YouTube videos from Nigeria · ${communityCount} NaijaVibe community videos`;
+        status.textContent = `${youtubeCount} trending YouTube videos from Nigeria · ${creatorCount} NaijaVibe creator videos`;
       }
     } catch (error) {
       console.error('Could not load trending Nigerian videos:', error);

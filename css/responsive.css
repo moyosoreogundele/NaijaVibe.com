@@ -9,7 +9,6 @@
   .cols-7{grid-template-columns:repeat(4,1fr)}.cols-5{grid-template-columns:repeat(3,1fr)}
   .layout-2{grid-template-columns:1fr}
   .site-footer{grid-template-columns:1fr 1fr}.copyright,.tagline{grid-column:auto;text-align:left}
-  .community-bar{height:auto;flex-wrap:wrap}.community-bar .txt{padding:12px 12px 12px 146px;width:auto}.community-bar .perks{flex-basis:100%;padding:8px 0}
 }
 @media (max-width:960px){
   .main-nav{overflow:visible;justify-content:center;flex-wrap:wrap;gap:2px}

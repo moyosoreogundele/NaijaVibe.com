@@ -1,7 +1,7 @@
 (function (NV) {
   const NAV = [
     ['home','home','index.html','Home'],['explore','map','explore.html','Explore'],['live','camera','live.html','Live'],['videos','play','videos.html','Videos'],['food','utensils','explore.html?cat=food','Food'],
-    ['culture','masks','explore.html?cat=culture','Culture'],['events','calendar','events.html','Events'],['marketplace','store','marketplace.html','Shop'],['community','users','community.html','Community']
+    ['culture','masks','explore.html?cat=culture','Culture'],['events','calendar','events.html','Events'],['marketplace','store','marketplace.html','Shop']
   ];
   const ICON = { map: 'pin' };
   const MORE = [['Trending','trending.html'],['Businesses','businesses/index.html'],['States','states/index.html'],['Saved','saved.html'],['About','about.html'],['Contact','contact.html']];
@@ -20,7 +20,6 @@
         </form>
         <div class="header-actions">
           <a class="icon-btn" href="${NV.url('notifications.html')}" aria-label="Notifications">${NV.icon('bell')}<span class="badge" data-notif-count>3</span></a>
-          <a class="icon-btn" href="${NV.url('community.html')}" aria-label="Messages">${NV.icon('message')}</a>
           <a class="btn btn-primary" href="${NV.url('login.html')}" data-auth="out">Login</a>
           <a class="btn btn-outline" href="${NV.url('signup.html')}" data-auth="out">Sign Up</a>
           <a class="btn btn-outline" href="${NV.url('profile.html')}" data-auth="in" hidden>Profile</a>
@@ -44,7 +43,7 @@
     host.innerHTML = `
     <footer class="site-footer">
       <div><a class="logo" href="${NV.url('index.html')}"><img src="${NV.url('assets/logos/logo.svg')}" alt=""><b>NAIJAVIBE</b></a><small style="display:block;margin-top:4px;color:#cfe3d6">Our People &nbsp;•&nbsp; Our Culture &nbsp;•&nbsp; Our Nigeria.</small></div>
-      <div><h4>Quick Links</h4><div class="quick-cols"><div>${L('Home','index.html')}${L('Explore Nigeria','explore.html')}${L('Food','explore.html?cat=food')}</div><div>${L('Events','events.html')}${L('Marketplace','marketplace.html')}${L('Community','community.html')}</div></div></div>
+      <div><h4>Quick Links</h4><div class="quick-cols"><div>${L('Home','index.html')}${L('Explore Nigeria','explore.html')}${L('Food','explore.html?cat=food')}</div><div>${L('Events','events.html')}${L('Marketplace','marketplace.html')}${L('Videos','videos.html')}</div></div></div>
       <div><h4>Resources</h4>${L('About Us','about.html')}${L('Contact','contact.html')}${L('Help & Support','contact.html')}${L('Privacy Policy','privacy.html')}${L('Terms of Service','terms.html')}</div>
       <div><h4>Get the latest updates</h4><form class="subscribe" id="subscribe"><input type="email" placeholder="Enter your email address" aria-label="Email" required><button>Subscribe</button></form></div>
       <div class="copyright">© 2025 NaijaVibe. All rights reserved.</div>

@@ -1,16 +1,15 @@
 NV.pages['create-post'] = function () {
   NV.router.requireAuth();
-  const f = NV.$('#post-form'), file = NV.$('#image'), prev = NV.$('#preview'), video = NV.$('#video-url'), socialVideo = NV.$('#social-video-url'), videoFile = NV.$('#video-file');
-  let url = null, videoUploadUrl = null;
+  const f = NV.$('#post-form'), video = NV.$('#video-url'), socialVideo = NV.$('#social-video-url'), videoFile = NV.$('#video-file');
+  let videoUploadUrl = null;
   NV.validate.bind(f);
-  NV.$('#state').innerHTML = '<option value="">Choose a state</option>' + window.NV_STATES.map(s => `<option>${s.name}</option>`).join('');
-  file.addEventListener('change', async () => { try { url = await NV.services.uploads.upload(file.files[0]); prev.src = url; prev.hidden = false; } catch (e) { NV.toast(e.message, 'error'); file.value = ''; } });
+  NV.$('#state').innerHTML = '<option value="">Choose a state</option>' + window.NV_STATES.map(s => `<option>${NV.esc(s.name)}</option>`).join('');
   videoFile.addEventListener('change', async () => {
     try {
       videoUploadUrl = await NV.services.uploads.upload(videoFile.files[0]);
       video.disabled = Boolean(videoUploadUrl);
       socialVideo.disabled = Boolean(videoUploadUrl);
-      NV.toast('Video uploaded and ready to publish.', 'success');
+      if (videoUploadUrl) NV.toast('Video uploaded and ready to share.', 'success');
     } catch (error) {
       videoFile.value = '';
       videoUploadUrl = null;
@@ -46,7 +45,11 @@ NV.pages['create-post'] = function () {
         return;
       }
     }
-    try { await NV.services.posts.create({ title: f.elements.title.value, body: f.body.value, category: f.category.value, state: f.state.value, image_url: url, video_url: videoUrl || null, external_video_url: externalVideoUrl || null }); NV.toast('Published for the community.', 'success'); setTimeout(() => NV.router.go('videos.html'), 700); }
+    if (!videoUrl && !externalVideoUrl) {
+      NV.toast('Choose a video file or add a video link before sharing.', 'error');
+      return;
+    }
+    try { await NV.services.posts.create({ title: f.elements.title.value.trim(), body: f.body.value.trim(), category: 'culture', state: f.state.value, image_url: null, video_url: videoUrl || null, external_video_url: externalVideoUrl || null }); NV.toast('Video shared successfully.', 'success'); setTimeout(() => NV.router.go('videos.html'), 700); }
     catch (err) { NV.toast(err.message || 'Could not publish. Try again.', 'error'); }
   });
 };

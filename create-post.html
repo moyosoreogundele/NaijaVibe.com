@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Create post · NaijaVibe</title>
-<meta name="description" content="Discover the real Nigeria: people, culture, food, places and stories.">
+<title>Share a video · NaijaVibe</title>
+<meta name="description" content="Share a video with people across Nigeria.">
 <meta name="theme-color" content="#0b8f3e">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="assets/logos/logo.svg" type="image/svg+xml">
@@ -20,20 +20,18 @@
 <link rel="stylesheet" href="css/animations.css">
 <link rel="stylesheet" href="css/responsive.css">
 </head>
-<body data-root="" data-page="create-post" data-nav="community">
+<body data-root="" data-page="create-post" data-nav="videos">
 <div class="page">
 <div id="site-header"></div>
-<div class="page-head"><h1>Create a post</h1></div>
+<div class="page-head"><h1>Share a video</h1><p>Upload a video or share a public video link.</p></div>
 <div class="compose"><form class="card form" id="post-form" novalidate style="padding:24px">
-<div class="field"><label for="title">Title</label><input class="input" id="title" name="title" data-rules="required" placeholder="Give your post a clear title"><span class="error"></span></div>
-<div class="field"><label for="category">Category</label><select class="select" id="category" name="category"><option value="food">Food & Drinks</option><option value="travel">Travel & Places</option><option value="culture">Culture & Heritage</option><option value="music">Music & Entertainment</option><option value="fashion">Fashion & Style</option><option value="events">Events</option></select></div>
+<div class="field"><label for="title">Video title</label><input class="input" id="title" name="title" data-rules="required" placeholder="Give your video a clear title"><span class="error"></span></div>
 <div class="field"><label for="state">State</label><select class="select" id="state" name="state"></select></div>
-<div class="field"><label for="body">Your story</label><textarea class="textarea" id="body" name="body" data-rules="required" placeholder="Tell people what makes it special"></textarea><span class="error"></span></div>
-<div class="field"><label for="image">Photo (max 5 MB)</label><input class="input" type="file" id="image" accept="image/jpeg,image/png,image/webp,image/gif"><img class="preview" id="preview" alt="Preview of your photo" hidden></div>
-<div class="field"><label for="video-file">Upload video (max 25 MB)</label><input class="input" type="file" id="video-file" accept="video/mp4,video/webm,video/ogg"><small>Uploaded videos are visible to everyone on NaijaVibe.</small></div>
+<div class="field"><label for="body">Description (optional)</label><textarea class="textarea" id="body" name="body" placeholder="Add a short description"></textarea></div>
+<div class="field"><label for="video-file">Upload video (max 25 MB)</label><input class="input" type="file" id="video-file" accept="video/mp4,video/webm,video/ogg"><small>Choose an MP4, WebM, or Ogg video file.</small></div>
 <div class="field"><label for="video-url">Or add a direct video link</label><input class="input" id="video-url" name="video_url" type="url" inputmode="url" placeholder="https://example.com/clip.mp4"><small>Use an HTTPS MP4, WebM, or Ogg video link.</small></div>
 <div class="field"><label for="social-video-url">Or share a public social video</label><input class="input" id="social-video-url" name="external_video_url" type="url" inputmode="url" placeholder="Paste a TikTok, Instagram Reel, Facebook, YouTube Short, or X link"><small>Public links from TikTok, Instagram, Facebook, YouTube, X, and other HTTPS sources appear on the separate Videos page. Some platforms require opening the original post.</small></div>
-<button class="btn btn-primary" type="submit">Publish post</button></form></div>
+<button class="btn btn-primary" type="submit">Share video</button></form></div>
 <div id="site-footer"></div>
 </div>
 <script src="js/config.js"></script>

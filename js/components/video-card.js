@@ -99,7 +99,7 @@
       ${player}
       ${video.source === 'youtube'
         ? `<a class="video-card-title" href="${NV.esc(video.external_video_url)}" target="_blank" rel="noopener noreferrer">${NV.esc(video.title || 'Trending Nigerian video')}</a>`
-        : `<a class="video-card-title" href="${NV.url('videos/watch.html?id=' + encodeURIComponent(video.id))}">${NV.esc(video.title || 'Nigerian community video')}</a>`}
+        : `<a class="video-card-title" href="${NV.url('videos/watch.html?id=' + encodeURIComponent(video.id))}">${NV.esc(video.title || 'Nigerian creator video')}</a>`}
       <div class="video-card-meta"><span>${NV.esc(state)}</span><span><b data-video-views>${views.toLocaleString('en-NG')}</b> ${NV.esc(video.view_label || 'views this week')}</span></div>
       <div class="video-card-creator">${video.source === 'youtube'
         ? (video.channel_url ? `<a href="${NV.esc(video.channel_url)}" target="_blank" rel="noopener noreferrer">${NV.esc(video.user || 'YouTube creator')}</a><span class="video-source">Trending on YouTube</span>` : '<span>Trending on YouTube</span>')

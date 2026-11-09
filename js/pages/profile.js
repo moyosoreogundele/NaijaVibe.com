@@ -87,7 +87,7 @@ NV.pages.profile = async function () {
     NV.bindFeed(box);
   } else {
     box.innerHTML = isOwnProfile
-      ? `<p class="empty">You haven't posted yet. <a class="text-link" href="create-post.html">Share your first post</a>.</p>`
+      ? `<p class="empty">You haven't shared a video yet. <a class="text-link" href="create-post.html">Share your first video</a>.</p>`
       : `<p class="empty">@${NV.esc(profile.username)} hasn't posted any stories yet.</p>`;
   }
 };
