@@ -1017,8 +1017,11 @@ async function sendEmail({ to, subject, html, text }) {
       console.error('Could not read Resend error response:', error);
     }
     console.error('Resend email delivery failed with status:', response.status, providerMessage);
-    const error = new Error('Email could not be sent. Check the Resend API key and verified sender address.');
-    error.code = 'EMAIL_SEND_FAILED';
+    const domainUnverified = response.status === 403 && /domain.*not verified|verify.*domain/i.test(providerMessage);
+    const error = new Error(domainUnverified
+      ? 'The email sender domain is not verified in Resend. Verify the domain used by RESEND_FROM_EMAIL, then try again.'
+      : 'Email could not be sent. Check the Resend API key and verified sender address.');
+    error.code = domainUnverified ? 'EMAIL_DOMAIN_NOT_VERIFIED' : 'EMAIL_SEND_FAILED';
     throw error;
   }
 }
@@ -1606,11 +1609,15 @@ app.post('/api/auth/signup', async (req, res, next) => {
       await sendSignupCode(email, code);
     } catch (error) {
       db.prepare('DELETE FROM pending_signups WHERE email = ?').run(email);
-      const code = ['EMAIL_NOT_CONFIGURED', 'EMAIL_SENDER_INVALID'].includes(error.code) ? error.code : 'EMAIL_SEND_FAILED';
+      const code = ['EMAIL_NOT_CONFIGURED', 'EMAIL_SENDER_INVALID', 'EMAIL_DOMAIN_NOT_VERIFIED'].includes(error.code)
+        ? error.code
+        : 'EMAIL_SEND_FAILED';
       const message = error.code === 'EMAIL_NOT_CONFIGURED'
         ? 'Email verification is not configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL on the server.'
         : error.code === 'EMAIL_SENDER_INVALID'
           ? error.message
+          : error.code === 'EMAIL_DOMAIN_NOT_VERIFIED'
+            ? error.message
           : 'We could not send your verification email. Check the Resend API key and verified sender address.';
       return fail(res, 503, code, message);
     }
@@ -2689,11 +2696,14 @@ app.get('/api/live/rooms/:id/reactions', (req, res) => {
 app.use(express.static(ROOT, { dotfiles: 'ignore', index: 'index.html' }));
 
 app.use((error, _req, res, _next) => {
-  console.error('Request failed:', error);
   if (res.headersSent) return;
+  if (error.type === 'entity.parse.failed') {
+    return fail(res, 400, 'INVALID_JSON', 'Request body must be valid JSON.');
+  }
   if (error.type === 'entity.too.large') {
     return fail(res, 413, 'UPLOAD_TOO_LARGE', 'This file is larger than the allowed upload size.');
   }
+  console.error('Request failed:', error);
   res.status(500).json({ error: { code: 'INTERNAL_ERROR', message: 'The server could not complete that request. Please try again.' } });
 });
 

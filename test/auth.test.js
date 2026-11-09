@@ -20,6 +20,7 @@ let server;
 let baseUrl;
 let resetUrl;
 let emailCount = 0;
+let resendFailure = null;
 const signupCodes = new Map();
 const deliveredEmails = [];
 let blockGoogleNews = false;
@@ -54,6 +55,9 @@ global.fetch = async (url, options) => {
     if (code) signupCodes.set(email.to[0], code);
     const link = email.text.match(/http:\/\/localhost\/reset-password\.html\?token=[^\s]+/);
     if (link) resetUrl = link[0];
+    if (resendFailure) {
+      return new Response(JSON.stringify({ message: resendFailure.message }), { status: resendFailure.status });
+    }
     return new Response(JSON.stringify({ id: crypto.randomUUID() }), { status: 200 });
   }
   return originalFetch(url, options);
@@ -200,6 +204,26 @@ test('signup reports invalid Resend sender configuration without storing an unus
   }
 });
 
+test('signup explains when Resend rejects an unverified sender domain', async () => {
+  resendFailure = {
+    status: 403,
+    message: 'The naijavibe.com domain is not verified. Please add and verify your domain.'
+  };
+  try {
+    const result = await post('signup', {
+      email: 'unverified-domain@example.com',
+      username: 'unverified_domain',
+      password: 'safe-password-123'
+    });
+    assert.equal(result.response.status, 503);
+    assert.equal(result.body.error.code, 'EMAIL_DOMAIN_NOT_VERIFIED');
+    assert.match(result.body.error.message, /Verify the domain used by RESEND_FROM_EMAIL/);
+    assert.equal(db.prepare('SELECT 1 FROM pending_signups WHERE email = ?').get('unverified-domain@example.com'), undefined);
+  } finally {
+    resendFailure = null;
+  }
+});
+
 test('authentication endpoints accept requests forwarded by Railway', async () => {
   const response = await originalFetch(`${baseUrl}/api/auth/login`, {
     method: 'POST',
@@ -211,6 +235,16 @@ test('authentication endpoints accept requests forwarded by Railway', async () =
   });
   assert.equal(response.status, 401);
   assert.equal((await response.json()).error.code, 'INVALID_CREDENTIALS');
+});
+
+test('malformed JSON receives a client error without logging the submitted body', async () => {
+  const response = await originalFetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{email:invalid}'
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error.code, 'INVALID_JSON');
 });
 
 test('headline discussions are public to read and require a signed-in account to post', async () => {

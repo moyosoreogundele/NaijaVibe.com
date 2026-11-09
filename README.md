@@ -5,7 +5,7 @@ Multi-page NaijaVibe site built with HTML, CSS, vanilla JavaScript, and a small 
 ## Run it locally
 1. Install Node.js 20 or newer.
 2. Copy `.env.example` to `.env`.
-3. Set `SESSION_SECRET` to a long random value, and set `RESEND_API_KEY` plus `RESEND_FROM_EMAIL` to a Resend API key and sender address on a verified domain. Keep `.env` private; it is ignored by Git.
+3. Set `SESSION_SECRET` to a long random value, and set `RESEND_API_KEY` plus `RESEND_FROM_EMAIL` to a Resend API key and sender address on a verified domain. The sender's domain must be verified in Resend before signup or password-reset emails can be delivered. Keep `.env` private; it is ignored by Git.
 4. Install dependencies with `npm install`, then start the app with `npm start`.
 5. Open http://localhost:8000.
 
@@ -15,7 +15,7 @@ The Node server serves both the site and its same-origin auth API. Do not use a 
 1. Keep `.env`, `.private/`, SQLite files, and uploaded media out of Git. `.env.example` is a template only; set secrets in the hosting provider's private variables.
 2. Push this project to GitHub and create a Railway project from that repository. The included `railway.json` builds with `npm ci`, starts with `npm start`, and checks `/api/health`.
 3. In Railway, attach a persistent volume at `/data`. The server uses Railway's volume mount path by default; optionally set `AUTH_DB_PATH=/data/auth.sqlite`. The database and uploaded media are stored beside this file under `/data`. Without a persistent volume, accounts and uploads can be lost when the service is redeployed.
-4. Configure `NODE_ENV=production`, `SESSION_SECRET` (at least 32 random characters), `APP_URL` (the Railway HTTPS URL or your custom HTTPS domain), `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and `YOUTUBE_API_KEY` in Railway's private service variables. `RESEND_FROM_EMAIL` can be a verified sender address or a display name followed by that address. Keep provider credentials and API keys out of Git and browser code.
+4. Configure `NODE_ENV=production`, `SESSION_SECRET` (at least 32 random characters), `APP_URL` (the Railway HTTPS URL or your custom HTTPS domain), `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and `YOUTUBE_API_KEY` in Railway's private service variables. Verify the sender's domain in Resend, then set `RESEND_FROM_EMAIL` to an address on that exact domain; it can include a display name. Keep provider credentials and API keys out of Git and browser code.
 5. Connect the GitHub repository to Railway's deploy trigger for the production branch. Each push will automatically build and deploy the latest website. For account recovery emails, verify the Resend sender domain and use the exact public `APP_URL`.
 
 The site is installable on supported phones over HTTPS using its web app manifest and service worker. On Android/Chrome, use the browser's **Install app** or **Add to Home screen** action. On iPhone/iPad, open the site in Safari and select **Share → Add to Home Screen**. Connected installs check for updates periodically and refresh when a new service-worker version activates; offline use falls back to cached pages and assets.
