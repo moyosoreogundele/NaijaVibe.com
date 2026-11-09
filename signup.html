@@ -23,14 +23,14 @@
 <body data-root="" data-page="signup" data-nav="">
 <div class="page">
 <div id="site-header"></div>
-<div class="auth-wrap"><div class="auth-card"><a class="logo" href="index.html"><img src="assets/logos/logo.svg" alt=""><span><b>NAIJAVIBE</b></span></a><h1>Create your account</h1><p>Verify your email to finish creating your NaijaVibe account.</p><form class="form" id="signup-form" novalidate><div class="field"><label for="username">Username</label><input class="input" id="username" name="username" type="text" data-rules="username" autocomplete="username"><span class="error"></span></div><div class="field"><label for="email">Email</label><input class="input" id="email" name="email" type="email" data-rules="required,email" autocomplete="email"><span class="error"></span></div><div class="field"><label for="password">Password</label><div class="password-input"><input class="input" id="password" name="password" type="password" data-rules="password" autocomplete="new-password"><button class="password-toggle" type="button" data-password-toggle aria-controls="password" aria-pressed="false">Show</button></div><span class="error"></span></div><button class="btn btn-primary" type="submit">Sign up</button></form><form class="form" id="verify-email-form" hidden novalidate><p id="verification-status" role="status" aria-live="polite"></p><div class="field"><label for="verification-code">Email verification code</label><input class="input" id="verification-code" name="code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required aria-describedby="verification-status"></div><button class="btn btn-primary" type="submit">Verify email</button><button class="btn btn-outline" id="resend-verification-code" type="button">Resend code</button><button class="btn btn-outline" id="change-signup-details" type="button">Use a different email</button></form><p class="auth-alt">Already a member? <a href="login.html">Log in</a></p></div></div>
+<div class="auth-wrap"><div class="auth-card"><a class="logo" href="index.html"><img src="assets/logos/logo.svg" alt=""><span><b>NAIJAVIBE</b></span></a><h1>Create your account</h1><p>Create an account and start sharing with NaijaVibe.</p><form class="form" id="signup-form" novalidate><div class="field"><label for="username">Username</label><input class="input" id="username" name="username" type="text" data-rules="username" autocomplete="username"><span class="error"></span></div><div class="field"><label for="email">Email</label><input class="input" id="email" name="email" type="email" data-rules="required,email" autocomplete="email"><span class="error"></span></div><div class="field"><label for="password">Password</label><div class="password-input"><input class="input" id="password" name="password" type="password" data-rules="password" autocomplete="new-password"><button class="password-toggle" type="button" data-password-toggle aria-controls="password" aria-pressed="false">Show</button></div><span class="error"></span></div><button class="btn btn-primary" type="submit">Sign up</button></form><p class="auth-alt">Already a member? <a href="login.html">Log in</a></p></div></div>
 <div id="site-footer"></div>
 </div>
 <script src="js/config.js"></script>
 <script src="states/state-data.js"></script>
 <script src="js/utils.js"></script>
 <script src="js/theme.js"></script>
-<script src="js/services/auth.service.js?v=auth-email-otp-1"></script>
+<script src="js/services/auth.service.js?v=auth-server-no-otp-1"></script>
 <script src="js/services/profile.service.js"></script>
 <script src="js/services/posts.service.js"></script>
 <script src="js/services/comments.service.js"></script>
@@ -55,7 +55,7 @@
 <script src="js/components/state-card.js"></script>
 <script src="js/components/event-card.js"></script>
 <script src="js/components/business-card.js"></script>
-<script src="js/pages/settings.js?v=auth-email-otp-1"></script>
+<script src="js/pages/settings.js?v=auth-server-no-otp-1"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

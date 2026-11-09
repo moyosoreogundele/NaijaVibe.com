@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const Database = require('better-sqlite3');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -14,14 +15,27 @@ process.env.RESEND_FROM_EMAIL = 'NaijaVibe <verify@example.com>';
 process.env.APP_NAME = 'NaijaVibe';
 process.env.APP_URL = 'http://localhost';
 
+const legacyDb = new Database(process.env.AUTH_DB_PATH);
+legacyDb.exec(`
+  CREATE TABLE users (
+    id TEXT PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE pending_signups (email TEXT PRIMARY KEY);
+`);
+legacyDb.prepare('INSERT INTO users (id, email, username, password_hash, created_at) VALUES (?, ?, ?, ?, ?)')
+  .run('existing-user-id', 'existing@example.com', 'existing_user', 'existing-password-hash', Date.now());
+legacyDb.close();
+
 const { app, db, parseNewsFeed, parseArticleMedia, socialVideoEmbed, isRecentNews, isEventCoverage, isNigeriaEvent } = require('../server');
 const originalFetch = global.fetch;
 let server;
 let baseUrl;
 let resetUrl;
 let emailCount = 0;
-let resendFailure = null;
-const signupCodes = new Map();
 const deliveredEmails = [];
 let blockGoogleNews = false;
 let rssFixture = '';
@@ -51,13 +65,8 @@ global.fetch = async (url, options) => {
     const email = JSON.parse(options.body);
     emailCount += 1;
     deliveredEmails.push(email);
-    const code = email.text.match(/verification code is (\d{6})/i)?.[1];
-    if (code) signupCodes.set(email.to[0], code);
     const link = email.text.match(/http:\/\/localhost\/reset-password\.html\?token=[^\s]+/);
     if (link) resetUrl = link[0];
-    if (resendFailure) {
-      return new Response(JSON.stringify({ message: resendFailure.message }), { status: resendFailure.status });
-    }
     return new Response(JSON.stringify({ id: crypto.randomUUID() }), { status: 200 });
   }
   return originalFetch(url, options);
@@ -85,44 +94,40 @@ async function post(route, body, cookie) {
   return { response, body: await response.json() };
 }
 
-async function signupVerified(email, username, password = 'safe-password-123') {
+async function signupUser(email, username, password = 'safe-password-123') {
   const signup = await post('signup', { email, username, password });
-  assert.equal(signup.response.status, 202);
-  const code = signupCodes.get(email);
-  assert.match(code, /^\d{6}$/);
-  return post('verify-email', { email, code });
+  assert.equal(signup.response.status, 201);
+  return signup;
 }
 
-test('signup requires a branded email OTP before creating an account; sessions, login and password reset work', async () => {
+test('signup creates and signs in an account without Resend; sessions, login and password reset work', async () => {
   const initialEmailCount = emailCount;
-  let result = await post('signup', {
-    email: 'moyo@example.com',
-    username: 'moyo_test',
-    password: 'safe-password-123'
-  });
-  assert.equal(result.response.status, 202);
-  assert.equal(result.body.verificationRequired, true);
-  assert.equal(result.response.headers.get('set-cookie'), null);
-  assert.equal(emailCount, initialEmailCount + 1);
-  assert.equal(db.prepare('SELECT 1 FROM users WHERE email = ?').get('moyo@example.com'), undefined);
-  assert.equal(deliveredEmails.at(-1).from, 'NaijaVibe <verify@example.com>');
-  assert.match(deliveredEmails.at(-1).subject, /NaijaVibe/);
-  assert.match(deliveredEmails.at(-1).text, /NaijaVibe verification code is \d{6}/);
-  const code = signupCodes.get('moyo@example.com');
-  result = await post('resend-code', { email: 'moyo@example.com' });
-  assert.equal(result.response.status, 429);
-  assert.equal(result.body.error.code, 'OTP_RESEND_WAIT');
-  const incorrectCode = code === '999999' ? '000000' : '999999';
-  result = await post('verify-email', { email: 'moyo@example.com', code: incorrectCode });
-  assert.equal(result.response.status, 400);
-  assert.equal(result.body.error.code, 'INVALID_OTP');
-  result = await post('login', { email: 'moyo@example.com', password: 'safe-password-123' });
-  assert.equal(result.response.status, 401);
-
-  result = await post('verify-email', { email: 'moyo@example.com', code });
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const resendFromEmail = process.env.RESEND_FROM_EMAIL;
+  delete process.env.RESEND_API_KEY;
+  delete process.env.RESEND_FROM_EMAIL;
+  let result;
+  try {
+    result = await post('signup', {
+      email: 'moyo@example.com',
+      username: 'moyo_test',
+      password: 'safe-password-123'
+    });
+  } finally {
+    process.env.RESEND_API_KEY = resendApiKey;
+    process.env.RESEND_FROM_EMAIL = resendFromEmail;
+  }
   assert.equal(result.response.status, 201);
   assert.equal(result.body.user.username, 'moyo_test');
+  assert.equal(emailCount, initialEmailCount);
+  assert.ok(db.prepare('SELECT 1 FROM users WHERE email = ?').get('moyo@example.com'));
+  assert.ok(db.prepare('SELECT 1 FROM users WHERE email = ?').get('existing@example.com'));
   const sessionCookie = result.response.headers.get('set-cookie').split(';')[0];
+  assert.match(result.response.headers.get('set-cookie'), /HttpOnly/i);
+  assert.equal(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'pending_signups'").get(), undefined);
+  result = await post('login', { email: 'moyo@example.com', password: 'safe-password-123' });
+  assert.equal(result.response.status, 200);
+
   const articleId = '0123456789abcdefabcd';
   let likeResponse = await originalFetch(`${baseUrl}/api/news/${articleId}/like`, {
     method: 'POST',
@@ -175,7 +180,7 @@ test('signup rejects invalid input and prevents duplicate accounts', async () =>
   assert.equal(invalid.response.status, 400);
   assert.equal(invalid.body.error.code, 'INVALID_EMAIL');
 
-  let result = await signupVerified('duplicate@example.com', 'duplicate_user');
+  let result = await signupUser('duplicate@example.com', 'duplicate_user');
   assert.equal(result.response.status, 201);
   result = await post('signup', {
     email: 'duplicate@example.com',
@@ -185,43 +190,6 @@ test('signup rejects invalid input and prevents duplicate accounts', async () =>
 
   assert.equal(result.response.status, 409);
   assert.equal(result.body.error.code, 'ACCOUNT_EXISTS');
-});
-
-test('signup reports invalid Resend sender configuration without storing an unusable OTP', async () => {
-  const originalSender = process.env.RESEND_FROM_EMAIL;
-  process.env.RESEND_FROM_EMAIL = 'not-a-valid-sender';
-  try {
-    const result = await post('signup', {
-      email: 'bad-sender@example.com',
-      username: 'bad_sender',
-      password: 'safe-password-123'
-    });
-    assert.equal(result.response.status, 503);
-    assert.equal(result.body.error.code, 'EMAIL_SENDER_INVALID');
-    assert.equal(db.prepare('SELECT 1 FROM pending_signups WHERE email = ?').get('bad-sender@example.com'), undefined);
-  } finally {
-    process.env.RESEND_FROM_EMAIL = originalSender;
-  }
-});
-
-test('signup explains when Resend rejects an unverified sender domain', async () => {
-  resendFailure = {
-    status: 403,
-    message: 'The naijavibe.com domain is not verified. Please add and verify your domain.'
-  };
-  try {
-    const result = await post('signup', {
-      email: 'unverified-domain@example.com',
-      username: 'unverified_domain',
-      password: 'safe-password-123'
-    });
-    assert.equal(result.response.status, 503);
-    assert.equal(result.body.error.code, 'EMAIL_DOMAIN_NOT_VERIFIED');
-    assert.match(result.body.error.message, /Verify the domain used by RESEND_FROM_EMAIL/);
-    assert.equal(db.prepare('SELECT 1 FROM pending_signups WHERE email = ?').get('unverified-domain@example.com'), undefined);
-  } finally {
-    resendFailure = null;
-  }
 });
 
 test('authentication endpoints accept requests forwarded by Railway', async () => {
@@ -260,7 +228,7 @@ test('headline discussions are public to read and require a signed-in account to
   });
   assert.equal(response.status, 401);
 
-  const result = await signupVerified('news-comment@example.com', 'news_comment');
+  const result = await signupUser('news-comment@example.com', 'news_comment');
   assert.equal(result.response.status, 201);
   const sessionCookie = result.response.headers.get('set-cookie').split(';')[0];
 
@@ -289,7 +257,7 @@ test('community posts and uploaded media persist on the server and are shared pu
 
   assert.equal(response.status, 401);
 
-  const signup = await signupVerified('shared-post@example.com', 'shared_poster');
+  const signup = await signupUser('shared-post@example.com', 'shared_poster');
   const sessionCookie = signup.response.headers.get('set-cookie').split(';')[0];
   const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   response = await originalFetch(`${baseUrl}/api/uploads`, {

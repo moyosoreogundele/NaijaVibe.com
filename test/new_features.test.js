@@ -1,5 +1,4 @@
 const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -20,18 +19,6 @@ const { app, db } = require('../server');
 const originalFetch = global.fetch;
 let server;
 let baseUrl;
-const signupCodes = new Map();
-
-global.fetch = async (url, options) => {
-  const parsedUrl = new URL(url);
-  if (parsedUrl.host === 'api.resend.com') {
-    const email = JSON.parse(options.body);
-    const code = email.text.match(/verification code is (\d{6})/i)?.[1];
-    if (code) signupCodes.set(email.to[0], code);
-    return new Response(JSON.stringify({ id: crypto.randomUUID() }), { status: 200 });
-  }
-  return originalFetch(url, options);
-};
 
 before(async () => {
   server = app.listen(0);
@@ -40,7 +27,6 @@ before(async () => {
 });
 
 after(async () => {
-  global.fetch = originalFetch;
   await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   db.close();
   fs.rmSync(dataDir, { recursive: true, force: true });
@@ -60,17 +46,16 @@ async function api(path, options = {}) {
   return { res, json };
 }
 
-async function createVerifiedUser(email, username, password = 'strong-password-123') {
-  await api('/api/auth/signup', { method: 'POST', body: { email, username, password } });
-  const code = signupCodes.get(email);
-  const verify = await api('/api/auth/verify-email', { method: 'POST', body: { email, code } });
-  const cookie = verify.res.headers.get('set-cookie')?.split(';')[0];
-  return { user: verify.json.user, cookie };
+async function createUser(email, username, password = 'strong-password-123') {
+  const signup = await api('/api/auth/signup', { method: 'POST', body: { email, username, password } });
+  assert.equal(signup.res.status, 201);
+  const cookie = signup.res.headers.get('set-cookie')?.split(';')[0];
+  return { user: signup.json.user, cookie };
 }
 
 test('Feature 1: User profiles, settings, password change, and creator follows', async () => {
-  const { user: user1, cookie: cookie1 } = await createVerifiedUser('tunde@example.com', 'tunde_lagos');
-  const { user: user2, cookie: cookie2 } = await createVerifiedUser('chioma@example.com', 'chioma_enugu');
+  const { user: user1, cookie: cookie1 } = await createUser('tunde@example.com', 'tunde_lagos');
+  const { user: user2, cookie: cookie2 } = await createUser('chioma@example.com', 'chioma_enugu');
 
   // 1. Get profile
   const profileRes = await api('/api/users/profile', { cookie: cookie1 });
@@ -133,9 +118,9 @@ test('Feature 1: User profiles, settings, password change, and creator follows',
 });
 
 test('direct messages are private, searchable, and text-only', async () => {
-  const { user: sender, cookie: senderCookie } = await createVerifiedUser('messenger@example.com', 'messenger');
-  const { user: recipient, cookie: recipientCookie } = await createVerifiedUser('friend@example.com', 'friend_naija');
-  const { cookie: strangerCookie } = await createVerifiedUser('stranger@example.com', 'stranger');
+  const { user: sender, cookie: senderCookie } = await createUser('messenger@example.com', 'messenger');
+  const { user: recipient, cookie: recipientCookie } = await createUser('friend@example.com', 'friend_naija');
+  const { cookie: strangerCookie } = await createUser('stranger@example.com', 'stranger');
 
   const anonymousSearch = await api('/api/users/search?q=friend');
   assert.equal(anonymousSearch.res.status, 401);
@@ -197,7 +182,7 @@ test('direct messages are private, searchable, and text-only', async () => {
 });
 
 test('push subscriptions are authenticated and private keys are never returned', async () => {
-  const { cookie } = await createVerifiedUser('push-user@example.com', 'push_user');
+  const { cookie } = await createUser('push-user@example.com', 'push_user');
   const anonymousConfig = await api('/api/push/config');
   assert.equal(anonymousConfig.res.status, 401);
 
@@ -246,9 +231,9 @@ test('push subscriptions are authenticated and private keys are never returned',
 });
 
 test('video likes persist per user and return an accurate shared count', async () => {
-  const { cookie: creatorCookie } = await createVerifiedUser('videocreator@example.com', 'video_creator');
-  const { user: viewer, cookie: viewerCookie } = await createVerifiedUser('videofan@example.com', 'video_fan');
-  const { cookie: otherCookie } = await createVerifiedUser('otherfan@example.com', 'other_fan');
+  const { cookie: creatorCookie } = await createUser('videocreator@example.com', 'video_creator');
+  const { user: viewer, cookie: viewerCookie } = await createUser('videofan@example.com', 'video_fan');
+  const { cookie: otherCookie } = await createUser('otherfan@example.com', 'other_fan');
   const created = await api('/api/posts', {
     method: 'POST',
     cookie: creatorCookie,
@@ -290,7 +275,7 @@ test('video likes persist per user and return an accurate shared count', async (
 });
 
 test('Feature 2: Marketplace products, businesses, and checkout flow', async () => {
-  const { user, cookie } = await createVerifiedUser('kemi@example.com', 'kemi_designs');
+  const { user, cookie } = await createUser('kemi@example.com', 'kemi_designs');
 
   // 1. List initial seeded products
   const listRes = await api('/api/products');
@@ -370,8 +355,8 @@ test('Feature 3: Live rooms, audio/video streaming, chat messages, and reactions
     }
   });
 
-  const { user: host, cookie: hostCookie } = await createVerifiedUser('livehost@example.com', 'live_host_ng');
-  const { user: viewer, cookie: viewerCookie } = await createVerifiedUser('viewer@example.com', 'live_viewer_ng');
+  const { user: host, cookie: hostCookie } = await createUser('livehost@example.com', 'live_host_ng');
+  const { user: viewer, cookie: viewerCookie } = await createUser('viewer@example.com', 'live_viewer_ng');
 
   // 1. Host creates a live audio room
   const createRoomRes = await api('/api/live/rooms', {

@@ -84,12 +84,7 @@ function authForm(id, handler, okMsg, next) {
   f.addEventListener('submit', async e => { e.preventDefault(); if (!NV.validate.form(f)) return;
     const b = NV.$('button[type=submit]', f); b.disabled = true;
     try { await handler(f); NV.toast(okMsg, 'success'); if (next) setTimeout(() => NV.router.go(next()), 700); }
-    catch (err) {
-      const message = err.code === 'email_not_confirmed' || /email not confirmed/i.test(err.message || '')
-        ? 'Email confirmation is enabled for this Supabase project. Turn off Confirm email in Supabase Auth settings to allow password-only signup and login.'
-        : err.message || 'Something went wrong. Check your details and try again.';
-      NV.toast(message, 'error');
-    }
+    catch (err) { NV.toast(err.message || 'Something went wrong. Check your details and try again.', 'error'); }
     b.disabled = false; });
 }
 function bindPasswordToggles(form) {
@@ -112,29 +107,8 @@ NV.pages.login = async () => {
 };
 NV.pages.signup = () => {
   const signupForm = NV.$('#signup-form');
-  const verificationForm = NV.$('#verify-email-form');
-  const verificationStatus = NV.$('#verification-status');
-  const verificationCode = NV.$('#verification-code');
-  const pendingEmailKey = 'nv:pending-signup-email';
   NV.validate.bind(signupForm);
   bindPasswordToggles(signupForm);
-  let verificationEmail = sessionStorage.getItem(pendingEmailKey) || '';
-  const showVerification = email => {
-    verificationEmail = email;
-    sessionStorage.setItem(pendingEmailKey, email);
-    verificationStatus.textContent = `Enter the six-digit code sent to ${email}. It expires in 10 minutes.`;
-    signupForm.hidden = true;
-    verificationForm.hidden = false;
-    verificationCode.focus();
-  };
-  const showSignup = () => {
-    sessionStorage.removeItem(pendingEmailKey);
-    verificationEmail = '';
-    verificationForm.hidden = true;
-    signupForm.hidden = false;
-  };
-  if (verificationEmail) showVerification(verificationEmail);
-
   signupForm.addEventListener('submit', async e => {
     e.preventDefault();
     if (!NV.validate.form(signupForm)) return;
@@ -146,53 +120,15 @@ NV.pages.signup = () => {
         password: signupForm.password.value,
         username: signupForm.username.value.trim()
       });
-      if (!result || !result.verificationRequired) throw new Error('We could not start email verification. Please try again.');
-      showVerification(result.email);
-      NV.toast('Verification code sent. Check your email.', 'success');
+      if (!result || !result.user) throw new Error('Your account could not be created. Please try again.');
+      NV.toast('Your account is ready. Welcome to NaijaVibe!', 'success');
+      setTimeout(() => NV.router.go('index.html'), 700);
     } catch (err) {
-      if (err.code === 'VERIFICATION_PENDING') showVerification(signupForm.email.value.trim().toLowerCase());
       NV.toast(err.message || 'Could not create your account. Check your details and try again.', 'error');
     } finally {
       submit.disabled = false;
     }
   });
-  verificationForm.addEventListener('submit', async e => {
-    e.preventDefault();
-    if (!verificationForm.reportValidity()) return;
-    const code = verificationCode.value.trim();
-    if (!/^\d{6}$/.test(code)) {
-      NV.toast('Enter the six-digit verification code from your email.', 'error');
-      return;
-    }
-    const submit = NV.$('button[type=submit]', verificationForm);
-    submit.disabled = true;
-    try {
-      const result = await NV.services.auth.verifyEmail({ email: verificationEmail, code });
-      if (!result || !result.user) throw new Error('Email verification completed, but sign-in did not. Please log in.');
-      sessionStorage.removeItem(pendingEmailKey);
-      NV.toast('Email verified. Welcome to NaijaVibe!', 'success');
-      setTimeout(() => NV.router.go('index.html'), 700);
-    } catch (err) {
-      NV.toast(err.message || 'Could not verify your email. Check the code and try again.', 'error');
-    } finally {
-      submit.disabled = false;
-    }
-  });
-  NV.$('#resend-verification-code').addEventListener('click', async event => {
-    const button = event.currentTarget;
-    button.disabled = true;
-    try {
-      await NV.services.auth.resendVerification(verificationEmail);
-      verificationStatus.textContent = `A new verification code was sent to ${verificationEmail}. It expires in 10 minutes.`;
-      verificationCode.value = '';
-      NV.toast('A new verification code was sent.', 'success');
-    } catch (err) {
-      NV.toast(err.message || 'Could not resend your verification code. Please try again.', 'error');
-    } finally {
-      button.disabled = false;
-    }
-  });
-  NV.$('#change-signup-details').addEventListener('click', showSignup);
 };
 NV.pages.forgot = () => authForm('#forgot-form', f => NV.services.auth.sendReset(f.email.value), 'Check your email for a reset link');
 NV.pages.reset = () => authForm('#reset-form', f => NV.services.auth.updatePassword(f.password.value), 'Password updated', () => 'login.html');

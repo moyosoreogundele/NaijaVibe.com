@@ -22,9 +22,6 @@ const SESSION_COOKIE = 'nv_session';
 const DEFAULT_AGORA_APP_ID = '569762c4c1444c27b3b6f0669a3a21c9';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const RESET_TTL_MS = 30 * 60 * 1000;
-const OTP_TTL_MS = 10 * 60 * 1000;
-const OTP_RESEND_INTERVAL_MS = 60 * 1000;
-const OTP_MAX_ATTEMPTS = 5;
 const NEWS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const LIVE_VIEWER_TTL_MS = 30 * 1000;
 const ARTICLE_MEDIA_LIMIT = 6;
@@ -102,15 +99,6 @@ db.exec(`
     token_hash TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     expires_at INTEGER NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS pending_signups (
-    email TEXT PRIMARY KEY,
-    username TEXT NOT NULL COLLATE NOCASE UNIQUE,
-    password_hash TEXT NOT NULL,
-    otp_hash TEXT NOT NULL,
-    expires_at INTEGER NOT NULL,
-    attempts INTEGER NOT NULL DEFAULT 0,
-    sent_at INTEGER NOT NULL
   );
   CREATE UNIQUE INDEX IF NOT EXISTS users_username_nocase ON users(username COLLATE NOCASE);
 
@@ -261,6 +249,7 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS live_viewers_room_seen_idx ON live_viewers(room_id, last_seen_at);
 `);
+db.exec('DROP TABLE IF EXISTS pending_signups');
 const configuredVapidPublicKey = process.env.WEB_PUSH_VAPID_PUBLIC_KEY;
 const configuredVapidPrivateKey = process.env.WEB_PUSH_VAPID_PRIVATE_KEY;
 if (Boolean(configuredVapidPublicKey) !== Boolean(configuredVapidPrivateKey)) {
@@ -1026,21 +1015,6 @@ async function sendEmail({ to, subject, html, text }) {
   }
 }
 
-function hashOtp(code) {
-  return crypto.createHmac('sha256', process.env.SESSION_SECRET).update(code).digest('hex');
-}
-
-async function sendSignupCode(email, code) {
-  const appName = process.env.APP_NAME || 'NaijaVibe';
-  const safeName = escapeHtml(appName);
-  await sendEmail({
-    to: email,
-    subject: `Verify your ${appName} account`,
-    text: `Your ${appName} verification code is ${code}. It expires in 10 minutes.`,
-    html: `<p>Your ${safeName} verification code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${code}</p><p>This code expires in 10 minutes. If you did not request it, you can ignore this email.</p>`
-  });
-}
-
 function publicUser(user) {
   return { id: user.id, email: user.email, username: user.username };
 }
@@ -1584,44 +1558,16 @@ app.post('/api/auth/signup', async (req, res, next) => {
   if (typeof password !== 'string' || password.length < 8 || Buffer.byteLength(password, 'utf8') > 128) {
     return fail(res, 400, 'INVALID_PASSWORD', 'Password must be at least 8 characters and no more than 128 bytes.');
   }
-  if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) {
-    return fail(res, 409, 'ACCOUNT_EXISTS', 'An account with this email already exists. Log in instead.');
-  }
-  if (db.prepare('SELECT 1 FROM users WHERE username = ? COLLATE NOCASE').get(username)) {
-    return fail(res, 409, 'USERNAME_EXISTS', 'That username is already in use.');
-  }
-  const pending = db.prepare('SELECT 1 FROM pending_signups WHERE email = ?').get(email);
-  if (pending) {
-    return fail(res, 409, 'VERIFICATION_PENDING', 'A verification code was already sent. Enter it or request another code.');
-  }
-  if (db.prepare('SELECT 1 FROM pending_signups WHERE username = ? COLLATE NOCASE').get(username)) {
-    return fail(res, 409, 'USERNAME_EXISTS', 'That username is already reserved by a pending signup.');
-  }
   try {
     const passwordHash = await hashPassword(password);
-    const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
-    const sentAt = Date.now();
-    db.prepare(`
-      INSERT INTO pending_signups (email, username, password_hash, otp_hash, expires_at, attempts, sent_at)
-      VALUES (?, ?, ?, ?, ?, 0, ?)
-    `).run(email, username, passwordHash, hashOtp(code), sentAt + OTP_TTL_MS, sentAt);
-    try {
-      await sendSignupCode(email, code);
-    } catch (error) {
-      db.prepare('DELETE FROM pending_signups WHERE email = ?').run(email);
-      const code = ['EMAIL_NOT_CONFIGURED', 'EMAIL_SENDER_INVALID', 'EMAIL_DOMAIN_NOT_VERIFIED'].includes(error.code)
-        ? error.code
-        : 'EMAIL_SEND_FAILED';
-      const message = error.code === 'EMAIL_NOT_CONFIGURED'
-        ? 'Email verification is not configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL on the server.'
-        : error.code === 'EMAIL_SENDER_INVALID'
-          ? error.message
-          : error.code === 'EMAIL_DOMAIN_NOT_VERIFIED'
-            ? error.message
-          : 'We could not send your verification email. Check the Resend API key and verified sender address.';
-      return fail(res, 503, code, message);
-    }
-    return res.status(202).json({ verificationRequired: true, email });
+    const user = db.transaction(() => {
+      const id = crypto.randomUUID();
+      db.prepare('INSERT INTO users (id, email, username, password_hash, created_at) VALUES (?, ?, ?, ?, ?)')
+        .run(id, email, username, passwordHash, Date.now());
+      return db.prepare('SELECT id, email, username FROM users WHERE id = ?').get(id);
+    })();
+    issueSession(res, user);
+    return res.status(201).json({ user: publicUser(user) });
   } catch (error) {
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
       if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) {
@@ -1631,83 +1577,6 @@ app.post('/api/auth/signup', async (req, res, next) => {
     }
     next(error);
   }
-});
-
-app.post('/api/auth/verify-email', (req, res, next) => {
-  const email = emailAddress(req.body.email);
-  const code = typeof req.body.code === 'string' ? req.body.code.trim() : '';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail(res, 400, 'INVALID_EMAIL', 'Enter a valid email address.');
-  if (!/^\d{6}$/.test(code)) return fail(res, 400, 'INVALID_OTP', 'Enter the six-digit verification code from your email.');
-  const pending = db.prepare('SELECT * FROM pending_signups WHERE email = ?').get(email);
-  if (!pending) return fail(res, 404, 'SIGNUP_NOT_FOUND', 'No pending signup was found. Start signup again.');
-  if (Date.now() > pending.expires_at) {
-    db.prepare('DELETE FROM pending_signups WHERE email = ?').run(email);
-    return fail(res, 410, 'OTP_EXPIRED', 'That verification code has expired. Start signup again to get a new code.');
-  }
-  if (pending.attempts >= OTP_MAX_ATTEMPTS) {
-    db.prepare('DELETE FROM pending_signups WHERE email = ?').run(email);
-    return fail(res, 429, 'OTP_ATTEMPTS_EXCEEDED', 'Too many incorrect codes. Start signup again to request a new code.');
-  }
-  if (!safeCompare(hashOtp(code), pending.otp_hash)) {
-    const attempts = pending.attempts + 1;
-    if (attempts >= OTP_MAX_ATTEMPTS) {
-      db.prepare('DELETE FROM pending_signups WHERE email = ?').run(email);
-      return fail(res, 429, 'OTP_ATTEMPTS_EXCEEDED', 'Too many incorrect codes. Start signup again to request a new code.');
-    }
-    db.prepare('UPDATE pending_signups SET attempts = ? WHERE email = ?').run(attempts, email);
-    return fail(res, 400, 'INVALID_OTP', 'That code is incorrect. Check the email and try again.');
-  }
-  try {
-    const user = db.transaction(() => {
-      const id = crypto.randomUUID();
-      db.prepare('INSERT INTO users (id, email, username, password_hash, created_at) VALUES (?, ?, ?, ?, ?)')
-        .run(id, pending.email, pending.username, pending.password_hash, Date.now());
-      db.prepare('DELETE FROM pending_signups WHERE email = ?').run(email);
-      return db.prepare('SELECT id, email, username FROM users WHERE id = ?').get(id);
-    })();
-    issueSession(res, user);
-    return res.status(201).json({ user: publicUser(user) });
-  } catch (error) {
-    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-      db.prepare('DELETE FROM pending_signups WHERE email = ?').run(email);
-      if (db.prepare('SELECT 1 FROM users WHERE email = ?').get(email)) {
-        return fail(res, 409, 'ACCOUNT_EXISTS', 'An account with this email already exists. Log in instead.');
-      }
-      return fail(res, 409, 'USERNAME_EXISTS', 'That username is already in use. Start signup with a different username.');
-    }
-    next(error);
-  }
-});
-
-app.post('/api/auth/resend-code', async (req, res) => {
-  const email = emailAddress(req.body.email);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail(res, 400, 'INVALID_EMAIL', 'Enter a valid email address.');
-  const pending = db.prepare('SELECT * FROM pending_signups WHERE email = ?').get(email);
-  if (!pending) return fail(res, 404, 'SIGNUP_NOT_FOUND', 'No pending signup was found. Start signup again.');
-  if (Date.now() > pending.expires_at) {
-    db.prepare('DELETE FROM pending_signups WHERE email = ?').run(email);
-    return fail(res, 410, 'OTP_EXPIRED', 'That verification request has expired. Start signup again to get a new code.');
-  }
-  const retryAfterSeconds = Math.ceil((pending.sent_at + OTP_RESEND_INTERVAL_MS - Date.now()) / 1000);
-  if (retryAfterSeconds > 0) {
-    return fail(res, 429, 'OTP_RESEND_WAIT', `Please wait ${retryAfterSeconds} seconds before requesting another code.`, { retryAfterSeconds });
-  }
-  const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
-  try {
-    await sendSignupCode(email, code);
-  } catch (error) {
-    if (error.code === 'EMAIL_NOT_CONFIGURED' || error.code === 'EMAIL_SENDER_INVALID') {
-      return fail(res, 503, error.code, error.message);
-    }
-    return fail(res, 503, 'EMAIL_SEND_FAILED', 'We could not send your verification email. Please try again later.');
-  }
-  const sentAt = Date.now();
-  db.prepare(`
-    UPDATE pending_signups
-    SET otp_hash = ?, expires_at = ?, attempts = 0, sent_at = ?
-    WHERE email = ?
-  `).run(hashOtp(code), sentAt + OTP_TTL_MS, sentAt, email);
-  return res.json({ verificationRequired: true, email });
 });
 
 app.post('/api/auth/login', async (req, res, next) => {
