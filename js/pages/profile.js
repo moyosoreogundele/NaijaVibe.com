@@ -45,6 +45,7 @@ NV.pages.profile = async function () {
   // Stats
   const stats = profile.stats || {};
   NV.$('#p-count').textContent = stats.posts != null ? stats.posts : posts.length;
+  if (NV.$('#p-likes')) NV.$('#p-likes').textContent = Number(stats.likes) || 0;
   if (NV.$('#p-followers')) NV.$('#p-followers').textContent = stats.followers != null ? stats.followers : 0;
   if (NV.$('#p-following')) NV.$('#p-following').textContent = stats.following != null ? stats.following : 0;
 

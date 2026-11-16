@@ -1776,6 +1776,11 @@ app.get('/api/users/profile', (req, res) => {
   const postsCount = db.prepare('SELECT COUNT(*) AS count FROM posts WHERE user_id = ?').get(user.id).count;
   const followersCount = db.prepare('SELECT COUNT(*) AS count FROM user_follows WHERE following_id = ?').get(user.id).count;
   const followingCount = db.prepare('SELECT COUNT(*) AS count FROM user_follows WHERE follower_id = ?').get(user.id).count;
+  const likesCount = db.prepare(`
+    SELECT COUNT(*) AS count FROM post_likes
+    JOIN posts ON posts.id = post_likes.post_id
+    WHERE posts.user_id = ?
+  `).get(user.id).count;
   let settings = { notif_email: true, notif_push: true, private: false };
   try { settings = Object.assign(settings, JSON.parse(profile.settings_json || '{}')); } catch {}
   res.json({
@@ -1789,7 +1794,7 @@ app.get('/api/users/profile', (req, res) => {
       state: profile.state || '',
       phone: profile.phone || '',
       website: profile.website || '',
-      stats: { posts: postsCount, followers: followersCount, following: followingCount }
+      stats: { posts: postsCount, followers: followersCount, following: followingCount, likes: likesCount }
     },
     settings
   });
@@ -1800,12 +1805,24 @@ app.get('/api/users/:username/profile', (req, res) => {
   const targetUser = db.prepare('SELECT id, username, email FROM users WHERE username = ? COLLATE NOCASE').get(username);
   if (!targetUser) return fail(res, 404, 'USER_NOT_FOUND', 'User profile not found.');
   const profile = getOrCreateProfile(targetUser.id, targetUser.username);
-  const userPosts = db.prepare('SELECT posts.*, users.username FROM posts JOIN users ON users.id = posts.user_id WHERE posts.user_id = ? ORDER BY posts.created_at DESC LIMIT 50').all(targetUser.id);
+  const activeUser = currentUser(req);
+  const userPosts = db.prepare(`
+    SELECT posts.*, users.username,
+      (SELECT COUNT(*) FROM post_likes WHERE post_id = posts.id) AS likes_count,
+      EXISTS (SELECT 1 FROM post_likes WHERE post_id = posts.id AND user_id = ?) AS liked_by_me
+    FROM posts JOIN users ON users.id = posts.user_id
+    WHERE posts.user_id = ?
+    ORDER BY posts.created_at DESC LIMIT 50
+  `).all(activeUser?.id || '', targetUser.id);
   const postsCount = db.prepare('SELECT COUNT(*) AS count FROM posts WHERE user_id = ?').get(targetUser.id).count;
   const followersCount = db.prepare('SELECT COUNT(*) AS count FROM user_follows WHERE following_id = ?').get(targetUser.id).count;
   const followingCount = db.prepare('SELECT COUNT(*) AS count FROM user_follows WHERE follower_id = ?').get(targetUser.id).count;
+  const likesCount = db.prepare(`
+    SELECT COUNT(*) AS count FROM post_likes
+    JOIN posts ON posts.id = post_likes.post_id
+    WHERE posts.user_id = ?
+  `).get(targetUser.id).count;
 
-  const activeUser = currentUser(req);
   let isFollowing = false;
   if (activeUser && activeUser.id !== targetUser.id) {
     const followCheck = db.prepare('SELECT 1 FROM user_follows WHERE follower_id = ? AND following_id = ?').get(activeUser.id, targetUser.id);
@@ -1821,9 +1838,78 @@ app.get('/api/users/:username/profile', (req, res) => {
       state: profile.state || '',
       website: profile.website || '',
       isFollowing,
-      stats: { posts: postsCount, followers: followersCount, following: followingCount }
+      stats: { posts: postsCount, followers: followersCount, following: followingCount, likes: likesCount }
     },
     posts: userPosts.map(publicPost)
+  });
+});
+
+app.get('/api/users/directory', (req, res) => {
+  const user = currentUser(req);
+  if (!user) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to browse people on NaijaVibe.');
+  const search = typeof req.query.q === 'string' ? req.query.q.trim().replace(/^@/, '') : '';
+  if (search.length > 40) return fail(res, 400, 'INVALID_SEARCH', 'Search text must be no more than 40 characters.');
+  const requestedLimit = Number.parseInt(req.query.limit, 10);
+  const limit = Number.isInteger(requestedLimit) ? Math.max(1, Math.min(requestedLimit, 50)) : 30;
+  const requestedOffset = Number.parseInt(req.query.offset, 10);
+  const offset = Number.isInteger(requestedOffset) ? Math.max(0, Math.min(requestedOffset, 100000)) : 0;
+  const escaped = search.replace(/[\\%_]/g, '\\$&').toLowerCase();
+  const onlineAfter = Date.now() - 2 * 60 * 1000;
+  const searchFilter = search
+    ? `AND (LOWER(users.username) LIKE ? ESCAPE '\\' OR LOWER(COALESCE(profiles.display_name, '')) LIKE ? ESCAPE '\\')`
+    : '';
+  const params = [
+    onlineAfter,
+    user.id,
+    user.id,
+    user.id,
+    ...(search ? [`%${escaped}%`, `%${escaped}%`] : []),
+    limit + 1,
+    offset
+  ];
+  const rows = db.prepare(`
+    SELECT users.id, users.username,
+      COALESCE(profiles.display_name, users.username) AS display_name,
+      COALESCE(profiles.avatar_url, 'assets/images/avatar-1.jpg') AS avatar_url,
+      COALESCE(profiles.state, '') AS state,
+      COALESCE(user_presence.last_seen_at, 0) >= ? AS online,
+      EXISTS (
+        SELECT 1 FROM user_follows
+        WHERE follower_id = ? AND following_id = users.id
+      ) AS is_following,
+      COALESCE((
+        SELECT COUNT(*) FROM user_follows
+        WHERE following_id = users.id
+      ), 0) AS followers_count
+    FROM users
+    LEFT JOIN profiles ON profiles.user_id = users.id
+    LEFT JOIN user_presence ON user_presence.user_id = users.id
+    WHERE users.id <> ?
+      AND (
+        COALESCE(json_extract(profiles.settings_json, '$.private'), 0) = 0
+        OR EXISTS (
+          SELECT 1 FROM user_follows
+          WHERE follower_id = ? AND following_id = users.id
+        )
+      )
+      ${searchFilter}
+    ORDER BY online DESC, users.created_at DESC, users.username COLLATE NOCASE
+    LIMIT ? OFFSET ?
+  `).all(...params);
+  const totalMembers = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
+  return res.json({
+    users: rows.slice(0, limit).map(result => ({
+      id: result.id,
+      username: result.username,
+      display_name: result.display_name || result.username,
+      avatar_url: result.avatar_url || 'assets/images/avatar-1.jpg',
+      state: result.state || '',
+      online: Boolean(result.online),
+      following: Boolean(result.is_following),
+      followers_count: Number(result.followers_count) || 0
+    })),
+    totalMembers,
+    hasMore: rows.length > limit
   });
 });
 

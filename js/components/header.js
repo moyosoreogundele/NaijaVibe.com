@@ -4,7 +4,7 @@
     ['culture','masks','explore.html?cat=culture','Culture'],['events','calendar','events.html','Events'],['marketplace','store','marketplace.html','Shop']
   ];
   const ICON = { map: 'pin' };
-  const MORE = [['Messages','messages.html'],['Trending','trending.html'],['Businesses','businesses/index.html'],['States','states/index.html'],['Saved','saved.html'],['About','about.html'],['Contact','contact.html']];
+  const MORE = [['People','people.html'],['Messages','messages.html'],['Trending','trending.html'],['Businesses','businesses/index.html'],['States','states/index.html'],['Saved','saved.html'],['About','about.html'],['Contact','contact.html']];
 
   NV.renderHeader = function () {
     const host = NV.$('#site-header'); if (!host) return;

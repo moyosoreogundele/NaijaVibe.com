@@ -120,6 +120,21 @@
         throw new Error(data.error?.message || 'Could not update follow status.');
       }
       return data;
+    },
+
+    async directory({ query = '', offset = 0, limit = 30 } = {}) {
+      const params = new URLSearchParams({
+        q: query.trim(),
+        offset: String(offset),
+        limit: String(limit)
+      });
+      const res = await fetch(`/api/users/directory?${params}`, { credentials: 'same-origin' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error?.message || 'Could not load the NaijaVibe member directory.');
+      if (!Array.isArray(data.users) || !Number.isInteger(data.totalMembers)) {
+        throw new Error('The member directory returned an invalid response.');
+      }
+      return data;
     }
   };
 })(window.NV);

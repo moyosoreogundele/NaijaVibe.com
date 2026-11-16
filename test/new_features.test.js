@@ -274,6 +274,77 @@ test('video likes persist per user and return an accurate shared count', async (
   assert.equal(viewer.username, 'video_fan');
 });
 
+test('member directory is searchable, paginated, follows privacy, and profiles show received likes', async () => {
+  const { cookie: viewerCookie } = await createUser('directory-viewer@example.com', 'directory_viewer');
+  const { cookie: creatorCookie } = await createUser('directory-creator@example.com', 'directory_creator');
+  const { cookie: privateCookie } = await createUser('directory-private@example.com', 'directory_private');
+  await createUser('directory-another@example.com', 'directory_another');
+
+  const anonymous = await api('/api/users/directory');
+  assert.equal(anonymous.res.status, 401);
+
+  const creatorProfile = await api('/api/users/profile', {
+    cookie: creatorCookie,
+    method: 'PATCH',
+    body: { display_name: 'Adaeze Adebayo' }
+  });
+  assert.equal(creatorProfile.res.status, 200);
+  const privateSettings = await api('/api/users/settings', {
+    cookie: privateCookie,
+    method: 'PATCH',
+    body: { private: true }
+  });
+  assert.equal(privateSettings.json.settings.private, true);
+
+  const nameSearch = await api('/api/users/directory?q=ADEBAYO', { cookie: viewerCookie });
+  assert.equal(nameSearch.res.status, 200);
+  assert.deepEqual(nameSearch.json.users.map(user => user.username), ['directory_creator']);
+  const privateSearch = await api('/api/users/directory?q=directory_private', { cookie: viewerCookie });
+  assert.deepEqual(privateSearch.json.users, []);
+  const invalidSearch = await api(`/api/users/directory?q=${'x'.repeat(41)}`, { cookie: viewerCookie });
+  assert.equal(invalidSearch.res.status, 400);
+
+  const firstPage = await api('/api/users/directory?limit=1', { cookie: viewerCookie });
+  assert.equal(firstPage.json.users.length, 1);
+  assert.equal(firstPage.json.hasMore, true);
+  assert.ok(firstPage.json.totalMembers >= 4);
+
+  const followed = await api('/api/users/directory_private/follow', {
+    method: 'POST',
+    cookie: viewerCookie
+  });
+  assert.equal(followed.json.following, true);
+  const followedPrivate = await api('/api/users/directory?q=directory_private', { cookie: viewerCookie });
+  assert.equal(followedPrivate.json.users.length, 1);
+  assert.equal(followedPrivate.json.users[0].following, true);
+  assert.equal(followedPrivate.json.users[0].followers_count, 1);
+
+  const created = await api('/api/posts', {
+    method: 'POST',
+    cookie: creatorCookie,
+    body: {
+      title: 'Adebayo creator video',
+      body: 'A video from Lagos.',
+      category: 'culture',
+      state: 'Lagos',
+      video_url: 'https://example.com/adebayo.mp4'
+    }
+  });
+  assert.equal(created.res.status, 201);
+  const like = await api(`/api/videos/${created.json.post.id}/like`, {
+    method: 'POST',
+    cookie: viewerCookie
+  });
+  assert.equal(like.json.likes, 1);
+
+  const ownProfile = await api('/api/users/profile', { cookie: creatorCookie });
+  assert.equal(ownProfile.json.profile.stats.likes, 1);
+  const publicProfile = await api('/api/users/directory_creator/profile', { cookie: viewerCookie });
+  assert.equal(publicProfile.json.profile.stats.likes, 1);
+  assert.equal(publicProfile.json.posts[0].likes, 1);
+  assert.equal(publicProfile.json.posts[0].liked, true);
+});
+
 test('Feature 2: Marketplace products, businesses, and checkout flow', async () => {
   const { user, cookie } = await createUser('kemi@example.com', 'kemi_designs');
 

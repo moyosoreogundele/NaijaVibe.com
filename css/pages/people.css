@@ -1,0 +1,20 @@
+.people-page{max-width:1100px;margin:0 auto;padding:32px var(--gutter) 48px}
+.people-heading{padding:10px 0 22px}
+.people-eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--green)}
+.people-heading h1{font-size:30px;margin:4px 0 8px}
+.people-heading>div>p:last-child{color:var(--muted)}
+.people-directory{max-width:900px;margin:0 auto}
+.people-query{max-width:520px}
+.people-status{font-size:12px;color:var(--muted);margin:14px 0}
+.people-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.member-card{display:flex;align-items:center;gap:12px;min-width:0;padding:14px}
+.member-avatar{width:52px;height:52px;flex:none;border-radius:50%;object-fit:cover;background:var(--green-soft)}
+.member-copy{flex:1;min-width:0}
+.member-copy>a{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--ink)}
+.member-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:11px}
+.member-copy .member-status{color:var(--green-dark)}
+.member-actions{display:flex;align-items:center;gap:8px;flex:none}
+.member-actions .btn{white-space:nowrap}
+.member-load-more{display:flex;margin:18px auto 0}
+@media(max-width:680px){.people-grid{grid-template-columns:1fr}}
+@media(max-width:400px){.member-card{gap:9px;padding:10px}.member-avatar{width:44px;height:44px}.member-actions .btn{padding:5px 9px;font-size:10px}.member-actions{gap:5px}}
