@@ -2648,6 +2648,93 @@ app.get('/api/live/rooms/:id/reactions', (req, res) => {
   res.json({ reactions: rows });
 });
 
+const SEARCH_ENGINE_PAGES = [
+  '/',
+  '/about.html',
+  '/explore.html',
+  '/events.html',
+  '/states/index.html',
+  '/businesses/index.html',
+  '/marketplace.html',
+  '/videos.html',
+  '/trending.html',
+  '/live.html'
+];
+const SEARCH_ENGINE_FALLBACK_ORIGIN = 'https://naijavibecom-production.up.railway.app';
+let invalidSearchEngineOriginLogged = false;
+
+function getSearchEngineOrigin() {
+  const configuredUrl = process.env.APP_URL?.trim();
+  if (!configuredUrl) return SEARCH_ENGINE_FALLBACK_ORIGIN;
+  try {
+    const url = new URL(configuredUrl);
+    if (['http:', 'https:'].includes(url.protocol) && !url.username && !url.password) return url.origin;
+  } catch (error) {
+    if (!invalidSearchEngineOriginLogged) {
+      console.error('APP_URL is invalid; search engine links are using the production fallback:', error.message);
+      invalidSearchEngineOriginLogged = true;
+    }
+    return SEARCH_ENGINE_FALLBACK_ORIGIN;
+  }
+  if (!invalidSearchEngineOriginLogged) {
+    console.error('APP_URL must use HTTP or HTTPS and must not contain credentials; search engine links are using the production fallback.');
+    invalidSearchEngineOriginLogged = true;
+  }
+  return SEARCH_ENGINE_FALLBACK_ORIGIN;
+}
+
+app.get('/robots.txt', (_req, res) => {
+  res.type('text/plain').send([
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /api/',
+    'Disallow: /admin/',
+    'Disallow: /login.html',
+    'Disallow: /signup.html',
+    'Disallow: /forgot-password.html',
+    'Disallow: /reset-password.html',
+    'Disallow: /messages.html',
+    'Disallow: /settings.html',
+    'Disallow: /notifications.html',
+    'Disallow: /saved.html',
+    'Disallow: /create-post.html',
+    'Disallow: /edit-profile.html',
+    'Disallow: /people.html',
+    'Disallow: /products/cart.html',
+    `Sitemap: ${getSearchEngineOrigin()}/sitemap.xml`,
+    ''
+  ].join('\n'));
+});
+
+app.get('/sitemap.xml', (_req, res) => {
+  const origin = getSearchEngineOrigin();
+  const staticUrls = SEARCH_ENGINE_PAGES.map(pathname => `${origin}${pathname}`);
+  const stateUrls = states.map(state => `${origin}/states/state.html?s=${encodeURIComponent(state.slug)}`);
+  const posts = db.prepare('SELECT id, created_at FROM posts ORDER BY created_at DESC LIMIT 49950').all();
+  const postUrls = posts.map(post => ({
+    url: `${origin}/posts/post.html?id=${encodeURIComponent(post.id)}`,
+    lastModified: new Date(post.created_at).toISOString()
+  }));
+  const urls = [
+    ...staticUrls.map(url => ({ url })),
+    ...stateUrls.map(url => ({ url })),
+    ...postUrls
+  ];
+  const xml = urls.map(({ url, lastModified }) => [
+    '  <url>',
+    `    <loc>${url.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</loc>`,
+    ...(lastModified ? [`    <lastmod>${lastModified}</lastmod>`] : []),
+    '  </url>'
+  ].join('\n'));
+  res.type('application/xml').send([
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ...xml,
+    '</urlset>',
+    ''
+  ].join('\n'));
+});
+
 app.use(express.static(ROOT, { dotfiles: 'ignore', index: 'index.html' }));
 
 app.use((error, _req, res, _next) => {

@@ -53,6 +53,26 @@ async function createUser(email, username, password = 'strong-password-123') {
   return { user: signup.json.user, cookie };
 }
 
+test('search engine discovery files expose public URLs and exclude private pages', async () => {
+  const robots = await originalFetch(`${baseUrl}/robots.txt`);
+  assert.equal(robots.status, 200);
+  assert.match(robots.headers.get('content-type'), /text\/plain/);
+  const robotsText = await robots.text();
+  assert.match(robotsText, /User-agent: \*/);
+  assert.match(robotsText, /Disallow: \/admin\//);
+  const sitemapOrigin = new URL(process.env.APP_URL).origin;
+  assert.ok(robotsText.includes(`Sitemap: ${sitemapOrigin}/sitemap.xml`));
+
+  const sitemap = await originalFetch(`${baseUrl}/sitemap.xml`);
+  assert.equal(sitemap.status, 200);
+  assert.match(sitemap.headers.get('content-type'), /application\/xml/);
+  const sitemapXml = await sitemap.text();
+  assert.match(sitemapXml, /<urlset xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9">/);
+  assert.ok(sitemapXml.includes(`<loc>${sitemapOrigin}/</loc>`));
+  assert.ok(sitemapXml.includes(`<loc>${sitemapOrigin}/states/state.html?s=abia</loc>`));
+  assert.doesNotMatch(sitemapXml, /\/admin\/|\/messages\.html|\/people\.html/);
+});
+
 test('Feature 1: User profiles, settings, password change, and creator follows', async () => {
   const { user: user1, cookie: cookie1 } = await createUser('tunde@example.com', 'tunde_lagos');
   const { user: user2, cookie: cookie2 } = await createUser('chioma@example.com', 'chioma_enugu');
