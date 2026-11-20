@@ -23,12 +23,20 @@
   .cat-strip{grid-template-columns:repeat(4,1fr);row-gap:10px}
   .cols-4,.cols-3{grid-template-columns:repeat(2,1fr)}
 }
+@media (max-width:680px){
+  .top-bar .logo small{display:none}
+  .settings-grid{grid-template-columns:1fr;gap:16px;padding:16px var(--gutter)}
+  .settings-grid nav{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+  .settings-grid nav::-webkit-scrollbar{display:none}
+  .settings-grid nav a{white-space:nowrap;padding:8px 14px;font-size:13px}
+}
 @media (max-width:560px){
   :root{--gutter:16px}
   .container{padding-inline:var(--gutter)}
   .home-main>section:not(.hero){margin-inline:var(--gutter)}
   .news-list{grid-template-columns:minmax(0,1fr)}
-  body{padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+  body{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+  .toast-wrap{bottom:calc(76px + env(safe-area-inset-bottom))}
   .main-nav{position:fixed;left:0;right:0;bottom:0;z-index:150;flex-wrap:nowrap;justify-content:flex-start;gap:0;height:calc(60px + env(safe-area-inset-bottom));padding:4px 0 calc(4px + env(safe-area-inset-bottom));overflow-x:auto;overflow-y:hidden;background:var(--card);border-top:1px solid var(--line);box-shadow:0 -2px 12px rgba(0,0,0,.1);scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .main-nav::-webkit-scrollbar{display:none}
   .main-nav>a{flex:1 0 48px;flex-direction:column;justify-content:center;gap:3px;height:100%;padding:5px 2px;font-size:8.5px;line-height:1}
@@ -36,18 +44,17 @@
   .main-nav>a span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .main-nav .more-wrap{display:none}
   .card-grid,.market-grid{grid-template-columns:minmax(0,1fr)}
-  .site-footer{grid-template-columns:1fr}
+  .site-footer{grid-template-columns:1fr;padding-bottom:calc(28px + env(safe-area-inset-bottom))}
   .hero h1{font-size:38px}
   .logo b{font-size:18px}
   .top-bar{gap:8px}
-  .logo img{width:40px}
-  .header-actions{gap:5px}
-  .header-actions .icon-btn{width:30px;height:30px}
+  .logo img{width:36px;height:30px}
+  .header-actions{gap:6px}
+  .header-actions .icon-btn{width:32px;height:32px}
   .hero-chips{flex-wrap:wrap}
 }
 @media (max-width:400px){
-  .top-bar .logo small{display:none}
-  .top-bar{gap:6px}
+  .top-bar{gap:4px}
   .header-actions{gap:2px}
   .header-actions .icon-btn{width:28px;height:28px}
 }

@@ -109,7 +109,7 @@ NV.pages.live = async function () {
   }
 
   // Floating reactions
-  const reactionEmojis = new Set(['❤️', '🔥', '🎉', '🇳🇬', '👏']);
+  const reactionEmojis = new Set(['❤️', '🔥', '🎉', '🇳🇬', '👏' ]);
 
   function spawnFloatingReaction(reaction) {
     if (!videoContainer) return;
@@ -154,7 +154,7 @@ NV.pages.live = async function () {
         console.error('Could not load live chat messages:', res.status, await res.text());
       }
     } catch (error) {
-      console.error('Could not poll live chat messages:', error);
+      console.error('Could not pull live chat messages:', error);
     }
   }
 
@@ -324,7 +324,7 @@ NV.pages.live = async function () {
       }
       hideNotice();
     } catch (error) {
-      console.error('Could not join Agora live room:', error);
+      console.error('Could not join  live room:', error);
       if (agoraClient) {
         try { await agoraClient.leave(); } catch (leaveError) { console.error('Could not leave the failed live connection:', leaveError); }
         agoraClient = null;
@@ -408,7 +408,7 @@ NV.pages.live = async function () {
       try {
         await agoraClient.leave();
       } catch (error) {
-        console.error('Could not leave the Agora live room:', error);
+        console.error('Could not leave the  live room:', error);
       }
       agoraClient = null;
     }

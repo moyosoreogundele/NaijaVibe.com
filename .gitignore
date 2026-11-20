@@ -1,5 +1,7 @@
 .env
 .env.*
+code.env
+*.env
 !.env.example
 .private/
 *.sqlite

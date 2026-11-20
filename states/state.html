@@ -26,6 +26,29 @@
 <div class="state-hero" id="state-hero"><div><h1 id="state-name"></h1><p id="state-meta"></p><a class="btn btn-primary" id="state-live-link" href="../live.html"><i data-i="radio"></i> Watch live in this state</a><a class="photo-credit" id="state-photo-credit" hidden target="_blank" rel="noopener noreferrer"></a></div></div>
 <main class="container state-content">
  <p id="state-about" class="prose"></p>
+ <section class="card state-weather-card" id="state-weather-card" aria-label="State weather forecast">
+  <div class="state-weather-top">
+   <div class="state-weather-current">
+    <div class="weather-temp-badge">
+     <span class="weather-icon" id="weather-icon" aria-hidden="true">☀️</span>
+     <div>
+      <span class="weather-temp" id="weather-temp">--°C</span>
+      <span class="weather-condition" id="weather-condition">Loading weather…</span>
+     </div>
+    </div>
+    <div class="weather-meta">
+     <span>Feels like <b id="weather-feels">--°C</b></span>
+     <span>Humidity <b id="weather-humidity">--%</b></span>
+     <span>Wind <b id="weather-wind">-- km/h</b></span>
+    </div>
+   </div>
+   <div class="weather-location-label">
+    <span class="chip chip-food" id="weather-capital-chip">Capital</span>
+    <small id="weather-source-badge">Live Forecast</small>
+   </div>
+  </div>
+  <div class="weather-forecast-strip" id="weather-forecast-strip"></div>
+ </section>
  <section class="state-culture-grid" aria-label="State food and culture">
   <article class="card state-culture-card"><h2>Local food</h2><ul id="state-food"></ul></article>
   <article class="card state-culture-card"><h2>Culture & heritage</h2><p id="state-culture"></p></article>

@@ -595,3 +595,68 @@ test('Feature 3: Live rooms, audio/video streaming, chat messages, and reactions
   assert.equal(endRes.json.ended, true);
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM live_viewers WHERE room_id = ?').get(roomId).count, 0);
 });
+
+test('Feature 4: State weather forecasts for Nigerian states and FCT', async () => {
+  // 1. Fetch weather for Lagos
+  const lagosWeather = await api('/api/weather/lagos');
+  assert.equal(lagosWeather.res.status, 200);
+  assert.equal(lagosWeather.json.state, 'Lagos');
+  assert.equal(lagosWeather.json.capital, 'Ikeja');
+  assert.ok(typeof lagosWeather.json.temperature === 'number');
+  assert.ok(typeof lagosWeather.json.humidity === 'number');
+  assert.ok(typeof lagosWeather.json.condition === 'string');
+  assert.ok(typeof lagosWeather.json.icon === 'string');
+  assert.ok(Array.isArray(lagosWeather.json.forecast));
+  assert.equal(lagosWeather.json.forecast.length >= 3, true);
+  assert.ok(typeof lagosWeather.json.forecast[0].max === 'number');
+  assert.ok(typeof lagosWeather.json.forecast[0].min === 'number');
+
+  // 2. Fetch weather for Abuja / FCT
+  const abujaWeather = await api('/api/weather/abuja');
+  assert.equal(abujaWeather.res.status, 200);
+  assert.equal(abujaWeather.json.capital, 'Abuja');
+  assert.ok(abujaWeather.json.forecast.length >= 3);
+
+  // 3. Reject invalid non-Nigerian state
+  const invalidState = await api('/api/weather/london');
+  assert.equal(invalidState.res.status, 404);
+  assert.equal(invalidState.json.error?.code, 'STATE_NOT_FOUND');
+});
+
+test('Feature 5: Member directory supports following, followers, and state filters', async () => {
+  const { user: userA, cookie: cookieA } = await createUser('friend-a@example.com', 'friend_a');
+  const { user: userB, cookie: cookieB } = await createUser('friend-b@example.com', 'friend_b');
+  const { cookie: cookieC } = await createUser('friend-c@example.com', 'friend_c');
+
+  // Set user states
+  await api('/api/users/profile', {
+    method: 'PATCH',
+    cookie: cookieA,
+    body: { state: 'Lagos' }
+  });
+  await api('/api/users/profile', {
+    method: 'PATCH',
+    cookie: cookieB,
+    body: { state: 'Rivers' }
+  });
+
+  // User C follows User A
+  await api('/api/users/friend_a/follow', { method: 'POST', cookie: cookieC });
+
+  // User C views "Following" -> should only contain User A
+  const followingRes = await api('/api/users/directory?filter=following', { cookie: cookieC });
+  assert.equal(followingRes.res.status, 200);
+  assert.ok(followingRes.json.users.some(u => u.username === 'friend_a'));
+  assert.ok(!followingRes.json.users.some(u => u.username === 'friend_b'));
+
+  // User A views "Followers" -> should contain User C
+  const followersRes = await api('/api/users/directory?filter=followers', { cookie: cookieA });
+  assert.equal(followersRes.res.status, 200);
+  assert.ok(followersRes.json.users.some(u => u.username === 'friend_c'));
+
+  // Filter by state: Rivers -> should contain User B
+  const stateRes = await api('/api/users/directory?state=Rivers', { cookie: cookieC });
+  assert.equal(stateRes.res.status, 200);
+  assert.ok(stateRes.json.users.some(u => u.username === 'friend_b'));
+  assert.ok(!stateRes.json.users.some(u => u.username === 'friend_a'));
+});

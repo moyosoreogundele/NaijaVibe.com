@@ -1849,12 +1849,30 @@ app.get('/api/users/directory', (req, res) => {
   if (!user) return fail(res, 401, 'AUTH_REQUIRED', 'Sign in to browse people on NaijaVibe.');
   const search = typeof req.query.q === 'string' ? req.query.q.trim().replace(/^@/, '') : '';
   if (search.length > 40) return fail(res, 400, 'INVALID_SEARCH', 'Search text must be no more than 40 characters.');
+  const filter = typeof req.query.filter === 'string' ? req.query.filter.trim().toLowerCase() : 'all';
+  const stateQuery = typeof req.query.state === 'string' ? req.query.state.trim().toLowerCase() : '';
   const requestedLimit = Number.parseInt(req.query.limit, 10);
   const limit = Number.isInteger(requestedLimit) ? Math.max(1, Math.min(requestedLimit, 50)) : 30;
   const requestedOffset = Number.parseInt(req.query.offset, 10);
   const offset = Number.isInteger(requestedOffset) ? Math.max(0, Math.min(requestedOffset, 100000)) : 0;
   const escaped = search.replace(/[\\%_]/g, '\\$&').toLowerCase();
   const onlineAfter = Date.now() - 2 * 60 * 1000;
+
+  let relationFilter = '';
+  const extraParams = [];
+  if (filter === 'following') {
+    relationFilter = `AND EXISTS (SELECT 1 FROM user_follows WHERE follower_id = ? AND following_id = users.id)`;
+    extraParams.push(user.id);
+  } else if (filter === 'followers') {
+    relationFilter = `AND EXISTS (SELECT 1 FROM user_follows WHERE follower_id = users.id AND following_id = ?)`;
+    extraParams.push(user.id);
+  }
+  let stateFilter = '';
+  if (stateQuery) {
+    stateFilter = `AND LOWER(COALESCE(profiles.state, '')) = ?`;
+    extraParams.push(stateQuery);
+  }
+
   const searchFilter = search
     ? `AND (LOWER(users.username) LIKE ? ESCAPE '\\' OR LOWER(COALESCE(profiles.display_name, '')) LIKE ? ESCAPE '\\')`
     : '';
@@ -1863,6 +1881,7 @@ app.get('/api/users/directory', (req, res) => {
     user.id,
     user.id,
     user.id,
+    ...extraParams,
     ...(search ? [`%${escaped}%`, `%${escaped}%`] : []),
     limit + 1,
     offset
@@ -1892,6 +1911,8 @@ app.get('/api/users/directory', (req, res) => {
           WHERE follower_id = ? AND following_id = users.id
         )
       )
+      ${relationFilter}
+      ${stateFilter}
       ${searchFilter}
     ORDER BY online DESC, users.created_at DESC, users.username COLLATE NOCASE
     LIMIT ? OFFSET ?
@@ -1911,6 +1932,146 @@ app.get('/api/users/directory', (req, res) => {
     totalMembers,
     hasMore: rows.length > limit
   });
+});
+
+const NIGERIA_STATE_WEATHER_COORDS = {
+  'abia': { name: 'Abia', capital: 'Umuahia', lat: 5.526, lon: 7.489, climate: 'coastal' },
+  'adamawa': { name: 'Adamawa', capital: 'Yola', lat: 9.200, lon: 12.483, climate: 'savanna' },
+  'akwa-ibom': { name: 'Akwa Ibom', capital: 'Uyo', lat: 5.037, lon: 7.912, climate: 'coastal' },
+  'anambra': { name: 'Anambra', capital: 'Awka', lat: 6.220, lon: 7.070, climate: 'tropical' },
+  'bauchi': { name: 'Bauchi', capital: 'Bauchi', lat: 10.315, lon: 9.844, climate: 'savanna' },
+  'bayelsa': { name: 'Bayelsa', capital: 'Yenagoa', lat: 4.927, lon: 6.264, climate: 'coastal' },
+  'benue': { name: 'Benue', capital: 'Makurdi', lat: 7.730, lon: 8.520, climate: 'tropical' },
+  'borno': { name: 'Borno', capital: 'Maiduguri', lat: 11.833, lon: 13.150, climate: 'sahel' },
+  'cross-river': { name: 'Cross River', capital: 'Calabar', lat: 4.958, lon: 8.327, climate: 'coastal' },
+  'delta': { name: 'Delta', capital: 'Asaba', lat: 6.198, lon: 6.734, climate: 'coastal' },
+  'ebonyi': { name: 'Ebonyi', capital: 'Abakaliki', lat: 6.324, lon: 8.113, climate: 'tropical' },
+  'edo': { name: 'Edo', capital: 'Benin City', lat: 6.335, lon: 5.603, climate: 'tropical' },
+  'ekiti': { name: 'Ekiti', capital: 'Ado-Ekiti', lat: 7.621, lon: 5.221, climate: 'tropical' },
+  'enugu': { name: 'Enugu', capital: 'Enugu', lat: 6.458, lon: 7.546, climate: 'tropical' },
+  'fct': { name: 'FCT - Abuja', capital: 'Abuja', lat: 9.076, lon: 7.398, climate: 'savanna' },
+  'abuja': { name: 'FCT - Abuja', capital: 'Abuja', lat: 9.076, lon: 7.398, climate: 'savanna' },
+  'gombe': { name: 'Gombe', capital: 'Gombe', lat: 10.289, lon: 11.167, climate: 'savanna' },
+  'imo': { name: 'Imo', capital: 'Owerri', lat: 5.483, lon: 7.033, climate: 'tropical' },
+  'jigawa': { name: 'Jigawa', capital: 'Dutse', lat: 11.756, lon: 9.339, climate: 'sahel' },
+  'kaduna': { name: 'Kaduna', capital: 'Kaduna', lat: 10.510, lon: 7.416, climate: 'savanna' },
+  'kano': { name: 'Kano', capital: 'Kano', lat: 12.002, lon: 8.591, climate: 'sahel' },
+  'katsina': { name: 'Katsina', capital: 'Katsina', lat: 12.990, lon: 7.600, climate: 'sahel' },
+  'kebbi': { name: 'Kebbi', capital: 'Birnin Kebbi', lat: 12.450, lon: 4.197, climate: 'sahel' },
+  'kogi': { name: 'Kogi', capital: 'Lokoja', lat: 7.802, lon: 6.743, climate: 'tropical' },
+  'kwara': { name: 'Kwara', capital: 'Ilorin', lat: 8.479, lon: 4.541, climate: 'tropical' },
+  'lagos': { name: 'Lagos', capital: 'Ikeja', lat: 6.524, lon: 3.379, climate: 'coastal' },
+  'nasarawa': { name: 'Nasarawa', capital: 'Lafia', lat: 8.493, lon: 8.515, climate: 'savanna' },
+  'niger': { name: 'Niger', capital: 'Minna', lat: 9.613, lon: 6.556, climate: 'savanna' },
+  'ogun': { name: 'Ogun', capital: 'Abeokuta', lat: 7.155, lon: 3.345, climate: 'tropical' },
+  'ondo': { name: 'Ondo', capital: 'Akure', lat: 7.257, lon: 5.205, climate: 'tropical' },
+  'osun': { name: 'Osun', capital: 'Osogbo', lat: 7.771, lon: 4.556, climate: 'tropical' },
+  'oyo': { name: 'Oyo', capital: 'Ibadan', lat: 7.377, lon: 3.947, climate: 'tropical' },
+  'plateau': { name: 'Plateau', capital: 'Jos', lat: 9.896, lon: 8.858, climate: 'highland' },
+  'rivers': { name: 'Rivers', capital: 'Port Harcourt', lat: 4.815, lon: 7.049, climate: 'coastal' },
+  'sokoto': { name: 'Sokoto', capital: 'Sokoto', lat: 13.005, lon: 5.247, climate: 'sahel' },
+  'taraba': { name: 'Taraba', capital: 'Jalingo', lat: 8.893, lon: 11.359, climate: 'savanna' },
+  'yobe': { name: 'Yobe', capital: 'Damaturu', lat: 11.747, lon: 11.960, climate: 'sahel' },
+  'zamfara': { name: 'Zamfara', capital: 'Gusau', lat: 12.162, lon: 6.661, climate: 'sahel' }
+};
+
+function interpretWeatherCode(code, isDay = 1) {
+  if (code === 0) return { condition: isDay ? 'Clear & Sunny' : 'Clear Sky', icon: isDay ? '☀️' : '🌙' };
+  if (code === 1) return { condition: 'Mainly Sunny', icon: isDay ? '🌤️' : '🌤️' };
+  if (code === 2) return { condition: 'Partly Cloudy', icon: '⛅' };
+  if (code === 3) return { condition: 'Overcast', icon: '☁️' };
+  if (code >= 45 && code <= 48) return { condition: 'Harmattan / Haze', icon: '🌫️' };
+  if (code >= 51 && code <= 55) return { condition: 'Light Drizzle', icon: '🌦️' };
+  if (code >= 61 && code <= 65) return { condition: 'Rain', icon: '🌧️' };
+  if (code >= 80 && code <= 82) return { condition: 'Rain Showers', icon: '🌧️' };
+  if (code >= 95) return { condition: 'Thunderstorm', icon: '⛈️' };
+  return { condition: 'Partly Cloudy', icon: '⛅' };
+}
+
+function getFallbackWeather(stateMeta) {
+  const c = stateMeta.climate;
+  const temp = c === 'sahel' ? 33 : c === 'highland' ? 24 : c === 'savanna' ? 31 : c === 'coastal' ? 29 : 30;
+  const humidity = c === 'coastal' ? 82 : c === 'sahel' ? 36 : c === 'highland' ? 58 : 68;
+  const wind = c === 'coastal' ? 14 : c === 'highland' ? 12 : 10;
+  const condition = c === 'coastal' ? 'Warm & Humid' : c === 'sahel' ? 'Hot & Sunny' : c === 'highland' ? 'Mild & Breezy' : 'Warm & Sunny';
+  const icon = c === 'sahel' ? '☀️' : c === 'highland' ? '⛅' : '🌤️';
+  return {
+    state: stateMeta.name,
+    capital: stateMeta.capital,
+    temperature: temp,
+    apparent_temperature: temp + 2,
+    humidity,
+    wind_speed: wind,
+    condition,
+    icon,
+    is_day: 1,
+    forecast: [
+      { day: 'Tomorrow', max: temp + 1, min: temp - 6, condition: 'Partly Cloudy', icon: '⛅' },
+      { day: 'In 2 days', max: temp + 2, min: temp - 5, condition: condition, icon: icon },
+      { day: 'In 3 days', max: temp, min: temp - 7, condition: 'Mainly Sunny', icon: '🌤️' }
+    ],
+    source: 'NaijaVibe Climate Model'
+  };
+}
+
+const stateWeatherCache = new Map();
+
+app.get('/api/weather/:state', async (req, res) => {
+  const raw = String(req.params.state || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+  const stateMeta = NIGERIA_STATE_WEATHER_COORDS[raw] || Object.values(NIGERIA_STATE_WEATHER_COORDS).find(s => s.name.toLowerCase() === raw);
+  if (!stateMeta) {
+    return fail(res, 404, 'STATE_NOT_FOUND', 'Weather data is only available for Nigerian states and the FCT.');
+  }
+
+  const cached = stateWeatherCache.get(raw);
+  if (cached && Date.now() - cached.timestamp < 60 * 60 * 1000) {
+    return res.json(cached.data);
+  }
+
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${stateMeta.lat}&longitude=${stateMeta.lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Africa%2FLagos&forecast_days=4`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'NaijaVibe/1.0' },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!response.ok) throw new Error(`Open-Meteo HTTP ${response.status}`);
+    const meteo = await response.json();
+    const current = meteo.current || {};
+    const daily = meteo.daily || {};
+    const interpreted = interpretWeatherCode(current.weather_code, current.is_day);
+    const dayNames = ['Tomorrow', 'In 2 days', 'In 3 days'];
+    const forecast = [];
+    if (Array.isArray(daily.time) && daily.time.length > 1) {
+      for (let i = 1; i < Math.min(4, daily.time.length); i++) {
+        const dInterp = interpretWeatherCode(daily.weather_code?.[i] ?? 1, 1);
+        forecast.push({
+          day: dayNames[i - 1] || daily.time[i],
+          max: Math.round(daily.temperature_2m_max?.[i] ?? current.temperature_2m ?? 30),
+          min: Math.round(daily.temperature_2m_min?.[i] ?? (current.temperature_2m ? current.temperature_2m - 6 : 24)),
+          condition: dInterp.condition,
+          icon: dInterp.icon
+        });
+      }
+    }
+    const data = {
+      state: stateMeta.name,
+      capital: stateMeta.capital,
+      temperature: Math.round(current.temperature_2m ?? 30),
+      apparent_temperature: Math.round(current.apparent_temperature ?? current.temperature_2m ?? 32),
+      humidity: Math.round(current.relative_humidity_2m ?? 70),
+      wind_speed: Math.round(current.wind_speed_10m ?? 12),
+      condition: interpreted.condition,
+      icon: interpreted.icon,
+      is_day: current.is_day ?? 1,
+      forecast: forecast.length ? forecast : getFallbackWeather(stateMeta).forecast,
+      source: 'Open-Meteo'
+    };
+    stateWeatherCache.set(raw, { timestamp: Date.now(), data });
+    return res.json(data);
+  } catch (error) {
+    const fallback = getFallbackWeather(stateMeta);
+    return res.json(fallback);
+  }
 });
 
 app.get('/api/users/search', (req, res) => {

@@ -26,6 +26,46 @@ NV.pages.state = async function () {
   NV.$('#state-live-link').href = NV.url('live.html?state=' + encodeURIComponent(s.name));
   NV.$('#state-about').textContent = s.about;
   NV.$('#updates-state-name').textContent = s.name;
+
+  // Load State Weather Forecast
+  const loadWeather = async () => {
+    try {
+      const res = await fetch(`/api/weather/${encodeURIComponent(s.slug)}`);
+      if (!res.ok) throw new Error('Weather unavailable');
+      const w = await res.json();
+      const iconEl = NV.$('#weather-icon');
+      const tempEl = NV.$('#weather-temp');
+      const condEl = NV.$('#weather-condition');
+      const feelsEl = NV.$('#weather-feels');
+      const humEl = NV.$('#weather-humidity');
+      const windEl = NV.$('#weather-wind');
+      const chipEl = NV.$('#weather-capital-chip');
+      const forecastStrip = NV.$('#weather-forecast-strip');
+
+      if (iconEl) iconEl.textContent = w.icon || '☀️';
+      if (tempEl) tempEl.textContent = `${w.temperature}°C`;
+      if (condEl) condEl.textContent = w.condition || 'Clear';
+      if (feelsEl) feelsEl.textContent = `${w.apparent_temperature}°C`;
+      if (humEl) humEl.textContent = `${w.humidity}%`;
+      if (windEl) windEl.textContent = `${w.wind_speed} km/h`;
+      if (chipEl) chipEl.textContent = `${w.capital} (${w.state})`;
+      if (forecastStrip && Array.isArray(w.forecast)) {
+        forecastStrip.innerHTML = w.forecast.map(f => `
+          <div class="weather-forecast-item">
+            <span class="forecast-day">${NV.esc(f.day)}</span>
+            <span class="forecast-icon">${NV.esc(f.icon || '⛅')}</span>
+            <span class="forecast-temp"><b>${f.max}°</b> / ${f.min}°</span>
+            <span class="forecast-cond">${NV.esc(f.condition)}</span>
+          </div>
+        `).join('');
+      }
+    } catch (e) {
+      const condEl = NV.$('#weather-condition');
+      if (condEl) condEl.textContent = 'Weather forecast temporarily unavailable';
+    }
+  };
+  loadWeather();
+
   const localCulture = window.NV_STATE_CULTURE[s.slug];
   NV.$('#state-food').innerHTML = localCulture.foods.map(food => `<li>${NV.esc(food)}</li>`).join('');
   NV.$('#state-culture').textContent = localCulture.culture;

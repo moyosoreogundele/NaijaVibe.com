@@ -28,8 +28,20 @@
     <div><p class="people-eyebrow">OUR COMMUNITY</p><h1>Find your people</h1><p>Discover members across Nigeria, follow creators and see what they share.</p></div>
   </header>
   <section class="people-directory" aria-label="NaijaVibe members">
-    <label class="sr-only" for="people-query">Search members by username or name</label>
-    <input class="input people-query" id="people-query" type="search" maxlength="40" placeholder="Search username or display name" autocomplete="off">
+    <div class="people-filter-bar">
+      <div class="pills people-tabs" role="tablist" aria-label="Filter members">
+        <button class="pill active" type="button" role="tab" aria-selected="true" data-filter="all">All Members</button>
+        <button class="pill" type="button" role="tab" aria-selected="false" data-filter="following">Following</button>
+        <button class="pill" type="button" role="tab" aria-selected="false" data-filter="followers">Followers</button>
+      </div>
+      <div class="people-search-row">
+        <label class="sr-only" for="people-query">Search members by username or name</label>
+        <input class="input people-query" id="people-query" type="search" maxlength="40" placeholder="Search username or display name" autocomplete="off">
+        <select class="select people-state-select" id="people-state" aria-label="Filter by state">
+          <option value="">All States</option>
+        </select>
+      </div>
+    </div>
     <p class="people-status" id="people-status" role="status" aria-live="polite">Loading members…</p>
     <div class="people-grid" id="people-grid"></div>
     <button class="btn btn-outline people-load-more" id="people-load-more" type="button" hidden>Load more people</button>

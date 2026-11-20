@@ -122,9 +122,11 @@
       return data;
     },
 
-    async directory({ query = '', offset = 0, limit = 30 } = {}) {
+    async directory({ query = '', filter = 'all', state = '', offset = 0, limit = 30 } = {}) {
       const params = new URLSearchParams({
         q: query.trim(),
+        filter: filter.trim(),
+        state: state.trim(),
         offset: String(offset),
         limit: String(limit)
       });
