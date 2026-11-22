@@ -418,10 +418,10 @@ NV.pages.live = async function () {
           remoteParticipants.set(remoteUser.uid, remoteUser);
           if (mediaType === 'video' && remoteUser.videoTrack) {
             message.hidden = true;
-            const isOwnerBroadcaster = stream.owner_id && remoteUser.uid === stream.owner_id;
-            const label = isOwnerBroadcaster
-              ? (stream.host_username || 'Host')
-              : `Creator ${String(remoteUser.uid).slice(-4)}`;
+            // Note: Agora UIDs are integers; we can only label by position, not match to owner UUID
+            const cells = videoContainer.querySelectorAll('.live-cell');
+            const isFirst = cells.length === 0;
+            const label = isFirst ? (stream.host_username || 'Host') : `Creator ${String(remoteUser.uid).slice(-4)}`;
             addVideoCell(remoteUser.uid, label, remoteUser.videoTrack);
           } else if (mediaType === 'audio' && remoteUser.audioTrack) {
             remoteUser.audioTrack.play();
