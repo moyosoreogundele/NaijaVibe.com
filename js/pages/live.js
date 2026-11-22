@@ -305,11 +305,27 @@ NV.pages.live = async function () {
       await agoraClient.join(tokenData.appId, tokenData.channelName, tokenData.token || null, tokenData.uid);
 
       if (host) {
-        const audioTrack = await window.AgoraRTC.createMicrophoneAudioTrack();
+        let audioTrack;
+        try {
+          audioTrack = await window.AgoraRTC.createMicrophoneAudioTrack();
+        } catch (audioErr) {
+          if (audioErr.name === 'NotAllowedError' || audioErr.code === 'PERMISSION_DENIED') {
+            throw new Error('Microphone permission denied. Allow mic access in your browser settings to go live.');
+          }
+          throw new Error('Microphone access failed: ' + (audioErr.message || 'Check audio input device.'));
+        }
         localAgoraTracks = [audioTrack];
         if (stream.room_type !== 'audio') {
-          const videoTrack = await window.AgoraRTC.createCameraVideoTrack();
-          localAgoraTracks.push(videoTrack);
+          try {
+            const videoTrack = await window.AgoraRTC.createCameraVideoTrack();
+            localAgoraTracks.push(videoTrack);
+          } catch (videoErr) {
+            console.warn('Camera initialization failed:', videoErr);
+            if (videoErr.name === 'NotAllowedError' || videoErr.code === 'PERMISSION_DENIED') {
+              throw new Error('Camera permission denied. Allow camera access in your browser settings to broadcast video.');
+            }
+            throw new Error('Camera access failed: ' + (videoErr.message || 'Check camera device.'));
+          }
         }
         await agoraClient.publish(localAgoraTracks);
         if (stream.room_type === 'audio') {
@@ -324,9 +340,9 @@ NV.pages.live = async function () {
       }
       hideNotice();
     } catch (error) {
-      console.error('Could not join  live room:', error);
+      console.error('Could not join live room:', error);
       if (agoraClient) {
-        try { await agoraClient.leave(); } catch (leaveError) { console.error('Could not leave the failed live connection:', leaveError); }
+        try { await agoraClient.leave(); } catch (leaveError) { console.error('Could not leave failed live connection:', leaveError); }
         agoraClient = null;
       }
       localAgoraTracks.forEach(track => track.close());
@@ -338,10 +354,16 @@ NV.pages.live = async function () {
         try {
           await fetch(`/api/live/rooms/${encodeURIComponent(stream.id)}/end`, { method: 'POST', credentials: 'same-origin' });
         } catch (endError) {
-          console.error('Could not close the live room after broadcast startup failed:', endError);
+          console.error('Could not close live room after broadcast startup failed:', endError);
         }
       }
-      showNotice(error.message || 'Could not join the live stream.');
+      let errorMsg = error.message || 'Could not join the live stream.';
+      if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        errorMsg = 'Live streaming requires HTTPS on mobile phones. Please access this app over HTTPS.';
+      } else if (error.message && (error.message.includes('101') || error.message.includes('CAN_NOT_JOIN_CHANNEL') || error.message.includes('DYNAMIC_KEY'))) {
+        errorMsg = 'Agora Live connection failed. Please ensure AGORA_APP_ID and AGORA_APP_CERTIFICATE are set in your Railway environment variables.';
+      }
+      showNotice(errorMsg);
       await loadStreams();
       return;
     }

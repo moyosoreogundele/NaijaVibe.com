@@ -18,6 +18,16 @@ NV.pages.people = async function () {
   let currentFilter = 'all';
   let currentState = '';
 
+  const initialTab = NV.param('tab');
+  if (initialTab === 'following' || initialTab === 'followers') {
+    currentFilter = initialTab;
+    filterTabs.forEach(t => {
+      const isMatch = t.dataset.filter === initialTab;
+      t.classList.toggle('active', isMatch);
+      t.setAttribute('aria-selected', String(isMatch));
+    });
+  }
+
   if (stateSelect && window.NV_STATES) {
     window.NV_STATES.forEach(st => {
       const opt = document.createElement('option');

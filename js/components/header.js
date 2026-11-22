@@ -1,6 +1,6 @@
 (function (NV) {
   const NAV = [
-    ['home','home','index.html','Home'],['explore','map','explore.html','Explore'],['live','camera','live.html','Live'],['videos','play','videos.html','Videos'],['food','utensils','explore.html?cat=food','Food'],
+    ['home','home','index.html','Home'],['friends','users','people.html?tab=following','Friends'],['explore','map','explore.html','Explore'],['live','camera','live.html','Live'],['videos','play','videos.html','Videos'],['food','utensils','explore.html?cat=food','Food'],
     ['culture','masks','explore.html?cat=culture','Culture'],['events','calendar','events.html','Events'],['marketplace','store','marketplace.html','Shop']
   ];
   const ICON = { map: 'pin' };

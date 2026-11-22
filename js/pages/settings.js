@@ -10,9 +10,25 @@ NV.pages.settings = async function () {
     el.checked = Boolean(currentSettings[k]);
     el.addEventListener('change', async () => {
       currentSettings[k] = el.checked;
+      if (k === 'notif_push') {
+        try {
+          if (el.checked) {
+            await NV.notifications.enablePush();
+            NV.toast('Phone push alerts enabled! 🔔', 'success');
+          } else {
+            await NV.notifications.disablePush();
+            NV.toast('Phone push alerts turned off.', 'info');
+          }
+        } catch (pushErr) {
+          el.checked = false;
+          currentSettings[k] = false;
+          NV.toast(pushErr.message || 'Could not enable push on this device.', 'error');
+          return;
+        }
+      }
       try {
         await NV.services.profile.updateSettings({ [k]: el.checked });
-        NV.toast('Setting saved', 'success');
+        if (k !== 'notif_push') NV.toast('Setting saved', 'success');
       } catch (err) {
         NV.toast('Saved locally: ' + err.message, 'info');
       }

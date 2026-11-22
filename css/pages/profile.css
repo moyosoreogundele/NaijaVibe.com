@@ -1,7 +1,19 @@
 .profile-cover{height:180px;background:linear-gradient(135deg,var(--green-deep),var(--green))}
-.profile-head{display:flex;gap:18px;align-items:flex-end;padding:0 var(--gutter);margin-top:-44px}
-.profile-head .avatar{width:96px;height:96px;border:4px solid var(--card)}
-.profile-stats{display:flex;gap:24px;padding:12px var(--gutter);font-size:13px}.profile-stats b{color:var(--ink)}
+.profile-head{display:flex;align-items:flex-end;gap:18px;padding:0 var(--gutter);margin-top:-44px;flex-wrap:wrap}
+.profile-head .avatar{width:96px;height:96px;border:4px solid var(--card);border-radius:50%;object-fit:cover;flex:none;background:var(--green-soft)}
+.profile-info{flex:1;min-width:160px;padding-bottom:4px}
+.profile-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.profile-stats{display:grid;grid-template-columns:repeat(4,1fr);text-align:center;gap:12px;padding:14px var(--gutter);font-size:13px;background:var(--card);border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin:12px 0}
+.profile-stats span{display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--muted);font-size:12px}
+.profile-stats b{color:var(--ink);font-size:17px;font-weight:700}
 .settings-grid{display:grid;grid-template-columns:220px 1fr;gap:24px;padding:24px var(--gutter)}
 .settings-grid nav a{display:block;padding:10px 12px;border-radius:8px;font-weight:500}.settings-grid nav a.active,.settings-grid nav a:hover{background:var(--green-soft)}
 @media(max-width:800px){.settings-grid{grid-template-columns:1fr}}
+@media(max-width:600px){
+  .profile-head{flex-direction:column;align-items:flex-start;gap:12px;margin-top:-40px}
+  .profile-head .avatar{width:80px;height:80px}
+  .profile-info{width:100%;padding-bottom:0}
+  .profile-actions{width:100%;display:flex;gap:8px;margin-left:0}
+  .profile-actions .btn{flex:1;text-align:center;justify-content:center}
+  .profile-stats{grid-template-columns:repeat(2,1fr);gap:10px;border-radius:12px;border:1px solid var(--line);margin:12px var(--gutter);padding:12px}
+}
