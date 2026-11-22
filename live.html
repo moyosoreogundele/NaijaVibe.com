@@ -56,10 +56,13 @@
           <div class="live-control-group">
             <button id="toggle-mic" class="live-control" type="button" title="Mute microphone" aria-pressed="false"><i data-i="mic"></i><span>Mic on</span></button>
             <button id="toggle-cam" class="live-control" type="button" title="Turn camera off" aria-pressed="false"><i data-i="video"></i><span>Camera on</span></button>
+            <button id="flip-cam" class="live-control" type="button" title="Flip camera" aria-label="Flip camera"><i data-i="repeat"></i><span>Flip</span></button>
           </div>
           <div class="live-control-group">
-            <button id="leave-live" class="live-control" type="button">Leave</button>
-            <button id="end-live" class="live-control live-control-end" type="button" hidden>End live</button>
+            <button id="join-cohost" class="live-control" type="button" title="Join stream as co-host" style="display:none"><i data-i="video"></i><span>Join Live</span></button>
+            <button id="share-live" class="live-control" type="button" title="Share live invite" aria-label="Share live"><i data-i="share"></i><span>Invite</span></button>
+            <button id="leave-live" class="live-control" type="button" title="Leave room"><i data-i="logout"></i><span>Leave</span></button>
+            <button id="end-live" class="live-control live-control-end" type="button" title="End live broadcast" hidden><i data-i="x"></i><span>End live</span></button>
           </div>
         </div>
       </div>
@@ -69,7 +72,10 @@
           <h2 id="live-room-title"></h2>
           <p id="live-room-host"></p>
         </div>
-        <button class="live-room-close" id="close-live-room" type="button" aria-label="Close live stream"><i data-i="x"></i></button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="btn btn-outline btn-sm" id="btn-share-live" type="button"><i data-i="share"></i> Invite friends</button>
+          <button class="live-room-close" id="close-live-room" type="button" aria-label="Close live stream"><i data-i="x"></i></button>
+        </div>
       </div>
       <div class="live-reactions-bar">
         <span class="muted live-reactions-label">Reactions:</span>
@@ -93,6 +99,15 @@
   <dialog id="live-start-dialog" class="live-start-dialog">
     <form id="live-start-form" method="dialog">
       <div class="live-dialog-heading"><div><span class="live-eyebrow">GO LIVE</span><h2>Share your moment</h2></div><button id="cancel-live-start" class="live-room-close" type="button" aria-label="Close"><i data-i="x"></i></button></div>
+      <div class="live-preview-box" id="live-preview-box">
+        <div class="live-preview-screen" id="live-preview-screen">
+          <div class="live-preview-placeholder"><i data-i="camera"></i><span>Camera Preview Starting…</span></div>
+        </div>
+        <div class="live-preview-controls">
+          <button type="button" class="btn btn-secondary btn-sm" id="preview-flip-cam"><i data-i="repeat"></i> Flip camera</button>
+          <span class="live-mic-indicator" id="live-mic-indicator">● Mic active</span>
+        </div>
+      </div>
       <label for="live-title">What are you sharing?</label>
       <input id="live-title" class="input" name="title" maxlength="100" minlength="3" placeholder="e.g. Live music from Lagos Island" required>
       <label for="live-topic">Choose a category</label>

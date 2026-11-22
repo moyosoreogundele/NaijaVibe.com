@@ -15,6 +15,7 @@ NV.pages.live = async function () {
   let agoraClient = null;
   let roomUser = null;
   let isHost = false;
+  let isCoHosting = false;
   let chatPollTimer = null;
   let reactionsPollTimer = null;
   let heartbeatTimer = null;
@@ -25,6 +26,10 @@ NV.pages.live = async function () {
   let isMicMuted = false;
   let isCamOff = false;
   let liveViewerId;
+  let previewTracks = null;
+  let availableCameras = [];
+  let currentCameraIndex = 0;
+  const remoteParticipants = new Map();
 
   try {
     liveViewerId = sessionStorage.getItem('nv:live-viewer-id');
@@ -45,6 +50,117 @@ NV.pages.live = async function () {
   const hideNotice = () => { if (notice) notice.hidden = true; };
   const avatar = name => NV.esc((name || 'N').slice(0, 1).toUpperCase());
 
+  // Multi-host video grid helpers (supports 1 to 4 broadcasters together)
+  function updateVideoGrid() {
+    if (!videoContainer) return;
+    const cells = videoContainer.querySelectorAll('.live-cell');
+    const total = cells.length;
+    videoContainer.className = 'live-video ' + (total <= 1 ? 'grid-1' : total === 2 ? 'grid-2' : total === 3 ? 'grid-3' : 'grid-4');
+  }
+
+  function addVideoCell(id, label, track) {
+    if (!videoContainer) return;
+    let cell = videoContainer.querySelector(`#cell-${id}`);
+    if (!cell) {
+      cell = document.createElement('div');
+      cell.id = `cell-${id}`;
+      cell.className = 'live-cell';
+      cell.innerHTML = `
+        <div class="live-cell-video"></div>
+        <span class="live-cell-tag"><span class="live-mic-dot"></span>${NV.esc(label)}</span>
+      `;
+      videoContainer.appendChild(cell);
+    } else {
+      const tag = cell.querySelector('.live-cell-tag');
+      if (tag) tag.innerHTML = `<span class="live-mic-dot"></span>${NV.esc(label)}`;
+    }
+    if (track) {
+      const wrapper = cell.querySelector('.live-cell-video');
+      wrapper.replaceChildren();
+      track.play(wrapper);
+    }
+    updateVideoGrid();
+  }
+
+  function removeVideoCell(id) {
+    if (!videoContainer) return;
+    const cell = videoContainer.querySelector(`#cell-${id}`);
+    if (cell) cell.remove();
+    updateVideoGrid();
+  }
+
+  // Camera flip helper (switches between front and rear cameras on mobile)
+  async function flipCamera(activeVideoTrack) {
+    if (!activeVideoTrack || !window.AgoraRTC) return;
+    try {
+      const cameras = availableCameras.length ? availableCameras : await window.AgoraRTC.getCameras();
+      if (cameras.length < 2) {
+        NV.toast('Only one camera found on this device.', 'info');
+        return;
+      }
+      currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
+      const nextCam = cameras[currentCameraIndex];
+      await activeVideoTrack.setDevice(nextCam.deviceId);
+      NV.toast(`Camera switched 🔄 (${nextCam.label || 'Camera ' + (currentCameraIndex + 1)})`, 'success');
+    } catch (err) {
+      console.warn('Flip camera error:', err);
+      NV.toast('Could not flip camera.', 'error');
+    }
+  }
+
+  // Pre-broadcast video preview helpers
+  async function startPreLivePreview() {
+    const previewScreen = NV.$('#live-preview-screen');
+    if (!previewScreen || !window.AgoraRTC) return;
+    try {
+      availableCameras = await window.AgoraRTC.getCameras().catch(() => []);
+      const previewAudio = await window.AgoraRTC.createMicrophoneAudioTrack().catch(() => null);
+      const previewVideo = await window.AgoraRTC.createCameraVideoTrack().catch(() => null);
+      previewTracks = [previewAudio, previewVideo].filter(Boolean);
+      if (previewVideo) {
+        previewScreen.replaceChildren();
+        previewVideo.play(previewScreen);
+      }
+      const micInd = NV.$('#live-mic-indicator');
+      if (micInd) micInd.textContent = previewAudio ? '● Mic active' : 'Mic unavailable';
+    } catch (err) {
+      console.warn('Pre-broadcast preview note:', err);
+    }
+  }
+
+  function stopPreLivePreview() {
+    if (previewTracks) {
+      previewTracks.forEach(t => t.close());
+      previewTracks = null;
+    }
+    const previewScreen = NV.$('#live-preview-screen');
+    if (previewScreen) {
+      previewScreen.innerHTML = '<div class="live-preview-placeholder"><i data-i="camera"></i><span>Camera Preview</span></div>';
+      NV.hydrateIcons();
+    }
+  }
+
+  // Share Live Invite Link (so creators and friends can invite others to join)
+  function shareLiveInvite() {
+    if (!currentRoom) return;
+    const url = new URL('live.html', location.origin);
+    url.searchParams.set('room', currentRoom.id);
+    const title = currentRoom.title || 'Live Broadcast';
+    if (navigator.share) {
+      navigator.share({
+        title: `${title} - NaijaVibe Live`,
+        text: `Watch or join ${currentRoom.host_username || 'us'} live on NaijaVibe right now!`,
+        url: url.toString()
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(url.toString()).then(() => {
+        NV.toast('Live link copied! Send it to your friends to join.', 'success');
+      }).catch(() => {
+        prompt('Copy live stream invite link:', url.toString());
+      });
+    }
+  }
+
   // Render stream list
   function renderStreams(streams) {
     if (!count || !list) return;
@@ -53,7 +169,7 @@ NV.pages.live = async function () {
       : 'No one is live right now';
 
     if (!streams.length) {
-      list.innerHTML = `<div class="live-empty">${liveStateFilter?.value ? `No one is live in ${NV.esc(liveStateFilter.value)} right now.` : 'No active live streams right now.'} Start a broadcast when Agora streaming is configured.</div>`;
+      list.innerHTML = `<div class="live-empty">${liveStateFilter?.value ? `No one is live in ${NV.esc(liveStateFilter.value)} right now.` : 'No active live streams right now.'} Start a broadcast when you are ready!</div>`;
       return;
     }
 
@@ -97,19 +213,21 @@ NV.pages.live = async function () {
       const res = await fetch('/api/live/rooms' + (query ? `?${query}` : ''));
       if (res.ok) {
         const data = await res.json();
-        renderStreams(data.rooms || []);
+        const rooms = data.rooms || [];
+        renderStreams(rooms);
         hideNotice();
-        return;
+        return rooms;
       }
-    } catch (err) {
-      console.error('Could not fetch live rooms:', err);
+    } catch (e) {
+      console.error('Failed to load live streams:', e);
     }
     if (count) count.textContent = 'Could not connect to live rooms';
     if (list) list.innerHTML = '<div class="live-empty">Live rooms could not be loaded. Please refresh the page.</div>';
+    return [];
   }
 
   // Floating reactions
-  const reactionEmojis = new Set(['❤️', '🔥', '🎉', '🇳🇬', '👏' ]);
+  const reactionEmojis = new Set(['❤️', '🔥', '🎉', '🇳🇬', '👏']);
 
   function spawnFloatingReaction(reaction) {
     if (!videoContainer) return;
@@ -185,7 +303,7 @@ NV.pages.live = async function () {
       </div>
       <h3 style="font-size:18px;margin:4px 0">${NV.esc(stream.host_name || stream.host_username || 'Naija Host')}</h3>
       <span class="badge" style="background:rgba(255,210,63,0.2);color:#ffd23f;border-radius:12px;padding:3px 12px;font-size:11px;font-weight:700">
-        ${NV.icon('mic')} ${isHostUser ? 'Microphone preview' : 'Audio stream from ' + NV.esc(stream.state)}
+        ${NV.icon('mic')} ${isHostUser ? 'Microphone active' : 'Audio stream from ' + NV.esc(stream.state)}
       </span>
       <div class="audio-equalizer">
         <span class="audio-bar"></span>
@@ -209,6 +327,8 @@ NV.pages.live = async function () {
 
     currentRoom = stream;
     isHost = host;
+    isCoHosting = false;
+    remoteParticipants.clear();
     room.hidden = false;
     liveLayout?.classList.add('has-room');
     room.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -222,8 +342,27 @@ NV.pages.live = async function () {
 
     const micBtn = NV.$('#toggle-mic');
     const camBtn = NV.$('#toggle-cam');
-    if (micBtn) micBtn.hidden = !host;
-    if (camBtn) camBtn.hidden = !(host && stream.room_type !== 'audio');
+    const flipBtn = NV.$('#flip-cam');
+    const cohostBtn = NV.$('#join-cohost');
+
+    if (micBtn) {
+      micBtn.hidden = !host;
+      micBtn.innerHTML = `${NV.icon('mic')}<span>Mic on</span>`;
+      micBtn.style.background = '';
+    }
+    if (camBtn) {
+      camBtn.hidden = !(host && stream.room_type !== 'audio');
+      camBtn.innerHTML = `${NV.icon('video')}<span>Camera on</span>`;
+      camBtn.style.background = '';
+    }
+    if (flipBtn) flipBtn.hidden = !(host && stream.room_type !== 'audio');
+    if (cohostBtn) {
+      cohostBtn.style.display = !host ? '' : 'none';
+      cohostBtn.innerHTML = stream.room_type === 'audio'
+        ? `${NV.icon('mic')}<span>Join Stage</span>`
+        : `${NV.icon('video')}<span>Join Live</span>`;
+      cohostBtn.classList.remove('active');
+    }
     isMicMuted = false;
     isCamOff = false;
 
@@ -247,6 +386,7 @@ NV.pages.live = async function () {
 
       agoraClient = window.AgoraRTC.createClient({ mode: 'live', codec: 'vp8' });
       await agoraClient.setClientRole(host ? 'host' : 'audience');
+
       let tokenRenewalInProgress = false;
       const renewAgoraToken = async () => {
         if (tokenRenewalInProgress || !agoraClient || !tokenData.token) return;
@@ -256,7 +396,7 @@ NV.pages.live = async function () {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uid: tokenData.uid })
+            body: JSON.stringify({ uid: tokenData.uid, role: (host || isCoHosting) ? 'publisher' : 'subscriber' })
           });
           const renewed = await response.json().catch(() => ({}));
           if (!response.ok || !renewed.token) throw new Error(renewed.error?.message || 'Could not renew the live connection.');
@@ -270,13 +410,19 @@ NV.pages.live = async function () {
       };
       agoraClient.on('token-privilege-will-expire', renewAgoraToken);
       agoraClient.on('token-privilege-did-expire', renewAgoraToken);
+
+      // Handle multi-participant remote video & audio publishing
       agoraClient.on('user-published', async (remoteUser, mediaType) => {
         try {
           await agoraClient.subscribe(remoteUser, mediaType);
+          remoteParticipants.set(remoteUser.uid, remoteUser);
           if (mediaType === 'video' && remoteUser.videoTrack) {
-            videoContainer.replaceChildren();
             message.hidden = true;
-            remoteUser.videoTrack.play(videoContainer);
+            const isOwnerBroadcaster = stream.owner_id && remoteUser.uid === stream.owner_id;
+            const label = isOwnerBroadcaster
+              ? (stream.host_username || 'Host')
+              : `Creator ${String(remoteUser.uid).slice(-4)}`;
+            addVideoCell(remoteUser.uid, label, remoteUser.videoTrack);
           } else if (mediaType === 'audio' && remoteUser.audioTrack) {
             remoteUser.audioTrack.play();
             if (stream.room_type === 'audio') message.hidden = true;
@@ -286,22 +432,29 @@ NV.pages.live = async function () {
           showNotice('A live audio or video track could not be played. Check your connection and browser permissions.');
         }
       });
-      agoraClient.on('user-unpublished', remoteUser => {
-        if (remoteUser.videoTrack) remoteUser.videoTrack.stop();
-        if (currentRoom && !host && stream.room_type !== 'audio') {
-          videoContainer.replaceChildren();
-          message.textContent = 'The broadcaster paused their video.';
-          message.hidden = false;
+
+      agoraClient.on('user-unpublished', (remoteUser, mediaType) => {
+        if (mediaType === 'video') {
+          removeVideoCell(remoteUser.uid);
+          const hasVideoCells = videoContainer.querySelectorAll('.live-cell').length > 0;
+          if (!hasVideoCells && !host && !isCoHosting && stream.room_type !== 'audio') {
+            message.textContent = 'Broadcaster video paused.';
+            message.hidden = false;
+          }
         }
       });
-      agoraClient.on('user-left', () => {
-        if (!host) {
-          videoContainer.replaceChildren();
+
+      agoraClient.on('user-left', remoteUser => {
+        remoteParticipants.delete(remoteUser.uid);
+        removeVideoCell(remoteUser.uid);
+        const hasVideoCells = videoContainer.querySelectorAll('.live-cell').length > 0;
+        if (!hasVideoCells && !host && !isCoHosting) {
           if (stream.room_type === 'audio') renderAudioStage(stream, false);
           message.textContent = 'The broadcaster has disconnected.';
           message.hidden = false;
         }
       });
+
       await agoraClient.join(tokenData.appId, tokenData.channelName, tokenData.token || null, tokenData.uid);
 
       if (host) {
@@ -331,8 +484,9 @@ NV.pages.live = async function () {
         if (stream.room_type === 'audio') {
           renderAudioStage(stream, true);
         } else {
-          videoContainer.replaceChildren();
-          localAgoraTracks.find(track => track.trackMediaType === 'video').play(videoContainer);
+          message.hidden = true;
+          const localVid = localAgoraTracks.find(track => track.trackMediaType === 'video');
+          addVideoCell('local', 'You (Host)', localVid);
         }
         message.hidden = true;
       } else if (stream.room_type === 'audio') {
@@ -416,26 +570,30 @@ NV.pages.live = async function () {
     if (reactionsPollTimer) clearInterval(reactionsPollTimer);
     if (heartbeatTimer) clearInterval(heartbeatTimer);
     try {
-      const presenceResponse = await fetch(`/api/live/rooms/${encodeURIComponent(stream.id)}/viewer`, {
+      await fetch(`/api/live/rooms/${encodeURIComponent(stream.id)}/viewer`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ viewerId: liveViewerId })
       });
-      if (!presenceResponse.ok) throw new Error(`Presence cleanup failed with HTTP ${presenceResponse.status}.`);
     } catch (error) {
       console.error('Could not clear the live viewer presence:', error);
     }
 
     if (agoraClient) {
       try {
+        if (localAgoraTracks.length) {
+          await agoraClient.unpublish(localAgoraTracks).catch(() => {});
+        }
         await agoraClient.leave();
       } catch (error) {
-        console.error('Could not leave the  live room:', error);
+        console.error('Could not leave the live room:', error);
       }
       agoraClient = null;
     }
     localAgoraTracks.forEach(track => track.close());
     localAgoraTracks = [];
+    remoteParticipants.clear();
+    isCoHosting = false;
 
     videoContainer.replaceChildren();
     room.hidden = true;
@@ -454,6 +612,115 @@ NV.pages.live = async function () {
     }
     isHost = false;
     await loadStreams();
+  }
+
+  // Co-host toggle handler (allows 2 to 4 users to stream together)
+  const cohostBtn = NV.$('#join-cohost');
+  if (cohostBtn) {
+    cohostBtn.addEventListener('click', async () => {
+      if (!currentRoom || !agoraClient) return;
+      roomUser = roomUser || await NV.services.auth.getUser();
+      if (!roomUser) {
+        NV.toast('Please sign in to join live broadcast as a co-host.', 'info');
+        NV.router.go('login.html?next=live.html');
+        return;
+      }
+
+      if (isCoHosting) {
+        // Leave co-hosting stage
+        try {
+          if (localAgoraTracks.length) {
+            await agoraClient.unpublish(localAgoraTracks).catch(() => {});
+            localAgoraTracks.forEach(t => t.close());
+            localAgoraTracks = [];
+          }
+          removeVideoCell('local');
+          await agoraClient.setClientRole('audience');
+          isCoHosting = false;
+          cohostBtn.innerHTML = currentRoom.room_type === 'audio'
+            ? `${NV.icon('mic')}<span>Join Stage</span>`
+            : `${NV.icon('video')}<span>Join Live</span>`;
+          cohostBtn.classList.remove('active');
+          const micBtn = NV.$('#toggle-mic');
+          const camBtn = NV.$('#toggle-cam');
+          const flipBtn = NV.$('#flip-cam');
+          if (micBtn) micBtn.hidden = true;
+          if (camBtn) camBtn.hidden = true;
+          if (flipBtn) flipBtn.hidden = true;
+          NV.toast('You left the broadcast stage.', 'info');
+        } catch (err) {
+          console.error('Error leaving co-host stage:', err);
+          NV.toast('Could not leave stage.', 'error');
+        }
+        return;
+      }
+
+      // Check max broadcasters (support up to 4 users together)
+      const currentCellCount = videoContainer.querySelectorAll('.live-cell').length;
+      if (currentCellCount >= 4) {
+        NV.toast('Maximum 4 broadcasters already live in this room.', 'info');
+        return;
+      }
+
+      // Start co-hosting
+      try {
+        cohostBtn.disabled = true;
+        NV.toast('Connecting your camera and mic…', 'info');
+
+        // Request publisher token from backend
+        const tokenRes = await fetch(`/api/live/rooms/${encodeURIComponent(currentRoom.id)}/token`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: 'publisher' })
+        });
+        const tokenData = await tokenRes.json().catch(() => ({}));
+        if (!tokenRes.ok) throw new Error(tokenData.error?.message || 'Could not get broadcast permissions.');
+
+        if (tokenData.token) {
+          await agoraClient.renewToken(tokenData.token);
+        }
+        await agoraClient.setClientRole('host');
+
+        const audioTrack = await window.AgoraRTC.createMicrophoneAudioTrack();
+        const tracks = [audioTrack];
+        if (currentRoom.room_type !== 'audio') {
+          const videoTrack = await window.AgoraRTC.createCameraVideoTrack();
+          tracks.push(videoTrack);
+        }
+        localAgoraTracks = tracks;
+        await agoraClient.publish(tracks);
+
+        isCoHosting = true;
+        const localVid = tracks.find(t => t.trackMediaType === 'video');
+        if (localVid) {
+          addVideoCell('local', `You (${roomUser.username || 'Co-Host'})`, localVid);
+        }
+
+        cohostBtn.innerHTML = `${NV.icon('userMinus')}<span>Leave Stage</span>`;
+        cohostBtn.classList.add('active');
+
+        const micBtn = NV.$('#toggle-mic');
+        const camBtn = NV.$('#toggle-cam');
+        const flipBtn = NV.$('#flip-cam');
+        if (micBtn) { micBtn.hidden = false; micBtn.innerHTML = `${NV.icon('mic')}<span>Mic on</span>`; }
+        if (camBtn && currentRoom.room_type !== 'audio') { camBtn.hidden = false; camBtn.innerHTML = `${NV.icon('video')}<span>Camera on</span>`; }
+        if (flipBtn && currentRoom.room_type !== 'audio') { flipBtn.hidden = false; }
+
+        NV.toast(`You are now LIVE with @${currentRoom.host_username || 'the host'}! 🎉`, 'success');
+      } catch (err) {
+        console.error('Co-host join failed:', err);
+        let msg = err.message || 'Could not join live.';
+        if (err.name === 'NotAllowedError' || err.code === 'PERMISSION_DENIED') {
+          msg = 'Camera or microphone permission denied. Check your browser permissions.';
+        }
+        NV.toast(msg, 'error');
+        try { await agoraClient.setClientRole('audience'); } catch (e) {}
+      } finally {
+        cohostBtn.disabled = false;
+        NV.hydrateIcons();
+      }
+    });
   }
 
   // Broadcaster Toggle Mic & Cam
@@ -499,10 +766,51 @@ NV.pages.live = async function () {
     });
   }
 
+  // Broadcaster Flip Camera
+  const flipBtn = NV.$('#flip-cam');
+  if (flipBtn) {
+    flipBtn.addEventListener('click', async () => {
+      const track = localAgoraTracks.find(item => item.trackMediaType === 'video');
+      if (track) {
+        await flipCamera(track);
+      } else {
+        NV.toast('Camera is not active.', 'info');
+      }
+    });
+  }
+
+  // Share Live Invite Buttons
+  const shareBtn = NV.$('#share-live');
+  if (shareBtn) shareBtn.addEventListener('click', shareLiveInvite);
+
+  const btnShareLive = NV.$('#btn-share-live');
+  if (btnShareLive) btnShareLive.addEventListener('click', shareLiveInvite);
+
+  // Pre-broadcast Preview Flip Button
+  const previewFlipBtn = NV.$('#preview-flip-cam');
+  if (previewFlipBtn) {
+    previewFlipBtn.addEventListener('click', async () => {
+      const track = previewTracks?.find(item => item.trackMediaType === 'video');
+      if (track) {
+        await flipCamera(track);
+      }
+    });
+  }
+
   // Dialog & Form Handlers
   const startDialog = NV.$('#live-start-dialog');
   const startForm = NV.$('#live-start-form');
   const stateSelect = NV.$('#live-state');
+  const roomTypeSelect = NV.$('#live-room-type');
+
+  if (roomTypeSelect) {
+    roomTypeSelect.addEventListener('change', () => {
+      const previewBox = NV.$('#live-preview-box');
+      if (previewBox) {
+        previewBox.style.display = roomTypeSelect.value === 'audio' ? 'none' : '';
+      }
+    });
+  }
 
   if (stateSelect && window.NV_STATES) {
     stateSelect.innerHTML = '<option value="">Choose a state</option>' +
@@ -525,12 +833,20 @@ NV.pages.live = async function () {
       return;
     }
     startDialog.showModal();
+    if (roomTypeSelect?.value !== 'audio') {
+      startPreLivePreview();
+    }
   });
 
-  NV.$('#cancel-live-start').addEventListener('click', () => startDialog.close());
+  NV.$('#cancel-live-start').addEventListener('click', () => {
+    stopPreLivePreview();
+    startDialog.close();
+  });
 
   startForm.addEventListener('submit', async event => {
     event.preventDefault();
+    stopPreLivePreview();
+
     const title = NV.$('#live-title').value.trim();
     const topic = NV.$('#live-topic').value;
     const roomType = NV.$('#live-room-type').value;
@@ -605,7 +921,7 @@ NV.pages.live = async function () {
   document.querySelectorAll('.live-react-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!currentRoom) return;
-      const reaction = btn.dataset.reaction || 'heart';
+      const reaction = btn.dataset.reaction || '❤️';
       spawnFloatingReaction(reaction);
       try {
         await fetch(`/api/live/rooms/${encodeURIComponent(currentRoom.id)}/react`, {
@@ -634,10 +950,34 @@ NV.pages.live = async function () {
     }
   });
 
+  // Page Initialization & Auto-join room from URL param
   roomUser = await NV.services.auth.getUser();
-  await loadStreams();
+  const streams = await loadStreams();
+
+  const targetRoomId = NV.param('room');
+  if (targetRoomId) {
+    const foundStream = streams.find(s => String(s.id) === String(targetRoomId));
+    if (foundStream) {
+      const isOwner = Boolean(roomUser && foundStream.owner_id === roomUser.id);
+      await joinRoom(foundStream, isOwner);
+    } else {
+      try {
+        const res = await fetch(`/api/live/rooms/${encodeURIComponent(targetRoomId)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.room) {
+            const isOwner = Boolean(roomUser && data.room.owner_id === roomUser.id);
+            await joinRoom(data.room, isOwner);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not auto-join requested live room:', err);
+      }
+    }
+  }
+
   streamListTimer = setInterval(() => {
-    if (document.visibilityState === 'visible') loadStreams();
+    if (document.visibilityState === 'visible' && !currentRoom) loadStreams();
   }, 15000);
   window.addEventListener('beforeunload', () => clearInterval(streamListTimer), { once: true });
 };

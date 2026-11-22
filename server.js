@@ -2595,7 +2595,9 @@ app.post('/api/live/rooms/:id/token', liveTokenLimiter, (req, res) => {
   const room = db.prepare('SELECT id, owner_id, status FROM live_rooms WHERE id = ?').get(req.params.id);
   if (!room || room.status !== 'live') return fail(res, 404, 'ROOM_NOT_FOUND', 'This live room has ended.');
   const user = currentUser(req);
-  const publisher = Boolean(user && room.owner_id === user.id);
+  const isOwner = Boolean(user && room.owner_id === user.id);
+  const wantsToPublish = req.body.role === 'publisher';
+  const publisher = isOwner || Boolean(user && wantsToPublish);
   const role = publisher ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
   const requestedUid = req.body.uid;
   if (requestedUid !== undefined && (!Number.isSafeInteger(requestedUid) || requestedUid < 1 || requestedUid > 2_147_483_647)) {

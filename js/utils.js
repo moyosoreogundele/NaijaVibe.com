@@ -74,7 +74,9 @@ if (Boolean(liveConfig.SUPABASE_URL) !== Boolean(liveConfig.SUPABASE_ANON_KEY)) 
     videoOff:'<path d="m3 3 18 18M10.6 6H13a2 2 0 0 1 2 2v2l5-3v10l-2.2-1.3M5 6.2A2 2 0 0 0 3 8v8a2 2 0 0 0 2 2h10"/>',
     sparkles:'<path d="m12 3 1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2L12 3zM19 14l1.2 2.8L23 18l-2.8 1.2L19 22l-1.2-2.8L15 18l2.8-1.2L19 14z"/>',
     thumbsUp:'<path d="M7 10v11H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3zM7 10l5-8a3 3 0 0 1 2 3l-1 5h6a3 3 0 0 1 3 4l-2 6a3 3 0 0 1-3 2H7"/>',
-    radio:'<rect x="3" y="6" width="18" height="15" rx="2"/><path d="m3 6 18-4M7 11h.01M7 16h.01M11 16h.01M15 16h5"/>'
+    radio:'<rect x="3" y="6" width="18" height="15" rx="2"/><path d="m3 6 18-4M7 11h.01M7 16h.01M11 16h.01M15 16h5"/>',
+    repeat:'<path d="m17 1 4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
+    userMinus:'<circle cx="9" cy="8" r="4"/><path d="M2 21c0-4 3.6-7 8-7s8 3 8 7M16 11h6"/>'
   };
   NV.icon = (n, cls) => `<svg class="i ${cls||''}" viewBox="0 0 24 24" aria-hidden="true">${P[n]||''}</svg>`;
   NV.hydrateIcons = (root) => (root || document).querySelectorAll('i[data-i]').forEach(el => {
