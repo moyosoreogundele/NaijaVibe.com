@@ -2,7 +2,7 @@
 window.NV_CONFIG = {
   SUPABASE_URL: '',
   SUPABASE_ANON_KEY: '',
-  AGORA_APP_ID: '6915d126648a4d3da6c37c0a02c0fc49',        // public Agora App ID; never put the App Certificate here
+  AGORA_APP_ID: '09f017ac30c74f03bda65c719cdfa253',        // public Agora App ID; never put the App Certificate here
   AGORA_TOKEN_FUNCTION: 'agora-token',
   STORAGE_BUCKET: 'uploads',
   APP_NAME: 'NaijaVibe'
