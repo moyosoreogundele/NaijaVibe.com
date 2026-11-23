@@ -1,7 +1,19 @@
 NV.pages.home = async function () {
-  const d = NV.demo(), cats = window.NV_CATEGORIES;
+  const cats = window.NV_CATEGORIES;
   NV.$('#cat-strip').innerHTML = cats.map(c => `<a href="${NV.url(c.slug === 'events' ? 'events.html' : c.slug === 'marketplace' ? 'marketplace.html' : c.slug === 'businesses' ? 'businesses/index.html' : 'explore.html?cat=' + c.slug)}"><span class="ic">${NV.icon(c.icon)}</span>${c.name}</a>`).join('');
-  NV.$('#trending').innerHTML = d.trending.map(p => NV.postCard(p)).join('');
+  
+  const trendingContainer = NV.$('#trending');
+  try {
+    const posts = await NV.services.posts.list({ limit: 6 });
+    if (posts && posts.length) {
+      trendingContainer.innerHTML = posts.map(p => NV.postCard(p)).join('');
+    } else {
+      trendingContainer.innerHTML = '<p class="empty">No community posts yet. <a href="create-post.html">Be the first to share something!</a></p>';
+    }
+  } catch (err) {
+    console.error('Could not load trending posts:', err);
+    trendingContainer.innerHTML = '<p class="empty">Community posts are temporarily unavailable.</p>';
+  }
   const stateCards = NV.$('#states');
   stateCards.innerHTML = window.NV_STATES.filter(s => ['Lagos','FCT Abuja','Kano','Rivers','Oyo','Enugu','Kaduna'].includes(s.name)).sort((a, b) => b.places - a.places).map(NV.stateCard).join('');
   NV.services.images.setupLazyStateImages(stateCards);

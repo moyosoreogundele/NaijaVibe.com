@@ -1,10 +1,20 @@
-NV.pages.explore = function () {
+NV.pages.explore = async function () {
   const cat = NV.param('cat'); const list = NV.$('#explore-list'); const region = NV.$('#region');
   const render = () => { const r = region.value; list.innerHTML = window.NV_STATES.filter(s => !r || s.region === r).map(NV.stateCard).join(''); };
   [...new Set(window.NV_STATES.map(s => s.region))].forEach(r => region.insertAdjacentHTML('beforeend', `<option>${r}</option>`));
   region.addEventListener('change', render); render();
   if (cat) NV.$('#explore-title').textContent = NV.catLabel(cat) + ' across Nigeria';
-  const t = NV.$('#explore-posts'); if (t) t.innerHTML = NV.demo().trending.filter(p => !cat || p.cat === cat).map(p => NV.postCard(p, { big: true })).join('') || '<p class="empty">Nothing here yet. Be the first to post.</p>';
+  const t = NV.$('#explore-posts');
+  if (t) {
+    try {
+      const posts = await NV.services.posts.list({ category: cat, limit: 20 });
+      t.innerHTML = posts.length
+        ? posts.map(p => NV.postCard(p, { big: true })).join('')
+        : `<p class="empty">No community posts in ${cat ? NV.catLabel(cat) : 'this category'} yet. <a href="${NV.url('create-post.html')}">Be the first to post!</a></p>`;
+    } catch (e) {
+      t.innerHTML = '<p class="empty">Could not load community posts. Please refresh.</p>';
+    }
+  }
 };
 NV.pages.states = function () {
   const g = NV.$('#states-grid'), q = NV.$('#state-q'); const draw = () => { const v = q.value.toLowerCase(); g.innerHTML = window.NV_STATES.filter(s => s.name.toLowerCase().includes(v) || s.region.toLowerCase().includes(v)).map(NV.stateCard).join('') || '<p class="empty">No state matches your search.</p>'; NV.services.images.setupLazyStateImages(g); };
@@ -69,7 +79,22 @@ NV.pages.state = async function () {
   const localCulture = window.NV_STATE_CULTURE[s.slug];
   NV.$('#state-food').innerHTML = localCulture.foods.map(food => `<li>${NV.esc(food)}</li>`).join('');
   NV.$('#state-culture').textContent = localCulture.culture;
-  NV.$('#state-posts').innerHTML = NV.demo().trending.map(p => NV.postCard(Object.assign({}, p, { place: s.name }))).join('');
+  
+  const statePostsBox = NV.$('#state-posts');
+  if (statePostsBox) {
+    try {
+      const allPosts = await NV.services.posts.list({ limit: 100 });
+      const statePosts = allPosts.filter(p => 
+        (p.state && p.state.toLowerCase() === s.name.toLowerCase()) || 
+        (p.place && p.place.toLowerCase() === s.name.toLowerCase())
+      );
+      statePostsBox.innerHTML = statePosts.length
+        ? statePosts.map(p => NV.postCard(p)).join('')
+        : `<p class="empty">No community posts from ${NV.esc(s.name)} yet. <a href="${NV.url('create-post.html')}">Share the first post from ${NV.esc(s.name)}!</a></p>`;
+    } catch (e) {
+      statePostsBox.innerHTML = `<p class="empty">Could not load posts from ${NV.esc(s.name)}.</p>`;
+    }
+  }
   const newsList = NV.$('#state-news-list');
   const eventsList = NV.$('#state-events-list');
   const status = NV.$('#state-updates-status');

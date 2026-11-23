@@ -1,11 +1,14 @@
 /* Demo admin screens only; they do not provide production access control. */
 const adminGuard = async () => { const u = await NV.services.auth.getUser(); if (!u) NV.router.go('login.html?next=' + encodeURIComponent(location.pathname)); };
 NV.pages.admin = async function () {
-  await adminGuard(); const d = NV.demo();
+  await adminGuard();
   const reports = await NV.services.reports.list();
-  const stats = [['Members', '12,480'], ['Posts today', '326'], ['Open reports', reports.filter(r => r.status !== 'resolved').length], ['Businesses pending', NV.local.list('businesses').length]];
+  const posts = await NV.services.posts.list({ limit: 10 });
+  const stats = [['Community posts', posts.length], ['Open reports', reports.filter(r => r.status !== 'resolved').length], ['Businesses listed', (await NV.services.businesses.list()).length]];
   NV.$('#stats').innerHTML = stats.map(s => `<div class="card stat"><b>${s[1]}</b><span>${s[0]}</span></div>`).join('');
-  NV.$('#recent').innerHTML = d.trending.map(p => `<tr><td>${NV.esc(p.title)}</td><td>${NV.catLabel(p.cat)}</td><td>${p.views}</td></tr>`).join('');
+  NV.$('#recent').innerHTML = posts.length 
+    ? posts.map(p => `<tr><td>${NV.esc(p.title || p.text || 'Post')}</td><td>${NV.catLabel(p.category || 'culture')}</td><td>${p.views || 0}</td></tr>`).join('')
+    : '<tr><td colspan="3" class="empty">No posts yet.</td></tr>';
 };
 NV.pages.reports = async function () {
   await adminGuard(); const box = NV.$('#rows');

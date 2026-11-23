@@ -146,7 +146,7 @@
       if (category) params.set('category', category);
       const result = await localRequest('/api/posts?' + params);
       if (!Array.isArray(result.items)) throw new Error('The posts service returned an invalid response.');
-      return result.items.concat(NV.local.list('posts'), NV.demo().posts || []);
+      return result.items.concat(NV.local.list('posts'));
     },
     async get(id) { const all = await this.list({ limit: 100 }); return all.find(p => String(p.id) === String(id)) || null; },
     async create({ title, body, category, state, image_url, video_url, external_video_url }) {

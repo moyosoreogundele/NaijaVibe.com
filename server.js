@@ -19,7 +19,7 @@ const RAILWAY_VOLUME_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH;
 const DB_PATH = process.env.AUTH_DB_PATH || path.join(RAILWAY_VOLUME_DIR || PRIVATE_DIR, 'auth.sqlite');
 const UPLOAD_DIR = path.join(path.dirname(DB_PATH), 'uploads');
 const SESSION_COOKIE = 'nv_session';
-const DEFAULT_AGORA_APP_ID = '569762c4c1444c27b3b6f0669a3a21c9';
+const DEFAULT_AGORA_APP_ID = '844bd870a1a84bbd8797044aaffc11e7';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const RESET_TTL_MS = 30 * 60 * 1000;
 const NEWS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -318,6 +318,124 @@ function seedInitialMarketAndLive() {
     ];
     for (const p of initialProducts) {
       insertProd.run(...p);
+    }
+  }
+
+  const postCount = db.prepare("SELECT COUNT(*) AS count FROM posts WHERE title NOT IN ('wi9', 'g')").get().count;
+  if (postCount === 0) {
+    db.prepare("DELETE FROM posts WHERE title IN ('wi9', 'g')").run();
+    let defaultUser = db.prepare('SELECT id, username FROM users LIMIT 1').get();
+    if (!defaultUser) {
+      const sysId = crypto.randomUUID();
+      const hash = '$2a$10$placeholder.system.user.hash.not.for.login';
+      db.prepare('INSERT INTO users (id, email, username, password_hash, created_at) VALUES (?, ?, ?, ?, ?)')
+        .run(sysId, 'community@naijavibe.com', 'naijavibe', hash, Date.now());
+      defaultUser = { id: sysId, username: 'naijavibe' };
+    }
+    const insertPost = db.prepare(`
+      INSERT INTO posts (id, user_id, title, body, category, state, image_url, video_url, external_video_url, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const initialPosts = [
+      [
+        'post-lagos-jollof',
+        defaultUser.id,
+        'The Best Jollof Rice Spots Across Lagos',
+        'From street-side bukas in Surulere to renowned restaurants on Victoria Island, smoky firewood party jollof remains the king of Lagos dining.',
+        'food',
+        'Lagos',
+        'assets/images/trend-food.jpg',
+        null,
+        null,
+        Date.now() - 3600000 * 2
+      ],
+      [
+        'post-cross-river-obudu',
+        defaultUser.id,
+        'Obudu Mountain Resort: A Highland Sanctuary in Cross River',
+        'High above the clouds on the Obudu Plateau, the breathtaking canopy walkway, cool highland air and mountain views make this one of Nigeria’s ultimate travel destinations.',
+        'travel',
+        'Cross River',
+        'assets/images/trend-travel.jpg',
+        null,
+        null,
+        Date.now() - 3600000 * 5
+      ],
+      [
+        'post-lagos-afrobeat',
+        defaultUser.id,
+        'Asake, Burna Boy and the Global Rise of Contemporary Afrobeat',
+        'From Lagos dance floors to global stadiums, modern Nigerian sounds continue to define contemporary pop music with infectious rhythms and vibrant culture.',
+        'music',
+        'Lagos',
+        'assets/images/trend-music.jpg',
+        null,
+        null,
+        Date.now() - 3600000 * 8
+      ],
+      [
+        'post-calabar-carnival',
+        defaultUser.id,
+        'Celebrating Heritage at the Calabar Carnival',
+        'Dubbed Africa’s biggest street party, the Calabar Carnival showcases stunning feathered masquerades, brass bands, and the vibrant living culture of Cross River.',
+        'events',
+        'Cross River',
+        'assets/images/trend-events.jpg',
+        null,
+        null,
+        Date.now() - 3600000 * 12
+      ],
+      [
+        'post-enugu-flavors',
+        defaultUser.id,
+        'The Heritage of Pounded Yam, Egusi and Ofe Nsala',
+        'Traditional Nigerian soups are living history passed down through generations. Exploring the rich herbs, spices and cooking rituals across our communities.',
+        'food',
+        'Enugu',
+        'assets/images/trend-culture.jpg',
+        null,
+        null,
+        Date.now() - 3600000 * 24
+      ],
+      [
+        'post-ogun-adire',
+        defaultUser.id,
+        'Abeokuta Adire: The Ancient Art of Indigo Dyeing',
+        'Centuries of Yoruba textile mastery come alive in the bustling markets of Ogun State, where indigo resist-dye patterns tell ancient proverbs and contemporary stories.',
+        'fashion',
+        'Ogun',
+        'assets/images/post-4.jpg',
+        null,
+        null,
+        Date.now() - 3600000 * 30
+      ],
+      [
+        'post-lagos-lekki',
+        defaultUser.id,
+        'Lekki Conservation Centre: Walking the Canopy Above Lagos',
+        'A peaceful mangrove escape right in the center of the metropolis, offering Africa’s longest canopy walkway and lush wildlife encounters.',
+        'travel',
+        'Lagos',
+        'assets/images/post-1.jpg',
+        null,
+        null,
+        Date.now() - 3600000 * 36
+      ],
+      [
+        'post-kano-leather',
+        defaultUser.id,
+        'Kano Dye Pits and Royal Leatherworks: Sahelian Heritage',
+        'The historic Kofar Mata dye pits and ancient tanneries in Kano have produced world-class indigo cloth and genuine leather craft for over five centuries.',
+        'culture',
+        'Kano',
+        'assets/images/post-3.jpg',
+        null,
+        null,
+        Date.now() - 3600000 * 48
+      ]
+    ];
+    for (const p of initialPosts) {
+      insertPost.run(...p);
     }
   }
 

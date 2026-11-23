@@ -11,14 +11,14 @@
         const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data.items) && data.items.length) {
+          if (Array.isArray(data.items)) {
             return data.items;
           }
         }
       } catch (err) {
         console.error('Failed to fetch products from backend:', err);
       }
-      return NV.demo().products || [];
+      return [];
     },
 
     async get(id) {

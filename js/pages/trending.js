@@ -1,6 +1,34 @@
-NV.pages.trending = function () {
-  const items = NV.demo().trending.slice().sort((a, b) => parseFloat(b.views) - parseFloat(a.views));
-  NV.$('#trend-list').innerHTML = items.map((p, i) => `<article class="card trend-item"><span class="rank">${i + 1}</span><div class="trend-photo" data-image-query="${NV.esc(`${p.title} ${p.place}`)}" data-image-fallback="Nigerian ${NV.esc(p.cat)}"><a class="trend-photo-link" href="${NV.router.postUrl(p.id)}" aria-label="${NV.esc(p.title)}"></a><a class="photo-credit" data-photo-credit hidden target="_blank" rel="noopener noreferrer"></a></div><a href="${NV.router.postUrl(p.id)}" style="flex:1"><span class="tag tag-${p.cat}">${NV.catLabel(p.cat)}</span><h3 style="font-size:16px;margin-top:6px">${NV.esc(p.title)}</h3><p class="muted">${NV.icon('eye')} ${p.views} · ${NV.icon('heart')} ${p.likes} · ${NV.icon('pin')} ${NV.esc(p.place)}</p></a></article>`).join('');
+NV.pages.trending = async function () {
+  const trendList = NV.$('#trend-list');
+  if (!trendList) return;
+  trendList.innerHTML = '<p class="muted">Loading trending posts…</p>';
+  try {
+    const posts = await NV.services.posts.list({ limit: 50 });
+    if (!posts || !posts.length) {
+      trendList.innerHTML = '<p class="empty">No trending posts yet. <a href="create-post.html">Be the first to share something!</a></p>';
+      return;
+    }
+    const items = posts.slice().sort((a, b) => (Number(b.views || 0) + Number(b.likes || 0)) - (Number(a.views || 0) + Number(a.likes || 0)));
+    trendList.innerHTML = items.map((p, i) => {
+      const cat = p.category || p.cat || 'culture';
+      return `<article class="card trend-item">
+        <span class="rank">${i + 1}</span>
+        <div class="trend-photo" data-image-query="${NV.esc(`${p.title} ${p.place || p.state || 'Nigeria'}`)}" data-image-fallback="Nigerian ${NV.esc(cat)}">
+          <a class="trend-photo-link" href="${NV.router.postUrl(p.id)}" aria-label="${NV.esc(p.title)}"></a>
+          <a class="photo-credit" data-photo-credit hidden target="_blank" rel="noopener noreferrer"></a>
+        </div>
+        <a href="${NV.router.postUrl(p.id)}" style="flex:1">
+          <span class="tag tag-${NV.esc(cat)}">${NV.catLabel(cat)}</span>
+          <h3 style="font-size:16px;margin-top:6px">${NV.esc(p.title)}</h3>
+          <p class="muted">${NV.icon('eye')} ${p.views || 0} · ${NV.icon('heart')} ${p.likes || 0} · ${NV.icon('pin')} ${NV.esc(p.place || p.state || 'Nigeria')}</p>
+        </a>
+      </article>`;
+    }).join('');
+    if (NV.services.images) NV.services.images.setupLazyPostImages(trendList);
+  } catch (err) {
+    console.error('Could not load trending posts:', err);
+    trendList.innerHTML = '<p class="empty">Trending posts are temporarily unavailable. Please refresh.</p>';
+  }
 };
 NV.pages.saved = async function () {
   const ids = NV.services.posts.savedIds().map(String); const all = await NV.services.posts.list();
