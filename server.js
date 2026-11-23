@@ -19,7 +19,8 @@ const RAILWAY_VOLUME_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH;
 const DB_PATH = process.env.AUTH_DB_PATH || path.join(RAILWAY_VOLUME_DIR || PRIVATE_DIR, 'auth.sqlite');
 const UPLOAD_DIR = path.join(path.dirname(DB_PATH), 'uploads');
 const SESSION_COOKIE = 'nv_session';
-const DEFAULT_AGORA_APP_ID = '844bd870a1a84bbd8797044aaffc11e7';
+const DEFAULT_AGORA_APP_ID = '6915d126648a4d3da6c37c0a02c0fc49';
+const DEFAULT_AGORA_APP_CERTIFICATE = '844bd870a1a84bbd8797044aaffc11e7';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const RESET_TTL_MS = 30 * 60 * 1000;
 const NEWS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -473,7 +474,8 @@ function fail(res, status, code, message, details = {}) {
 app.get('/api/health', (_req, res) => {
   try {
     db.prepare('SELECT 1').get();
-    const appId = process.env.AGORA_APP_ID || (process.env.AGORA_APP_CERTIFICATE ? '' : DEFAULT_AGORA_APP_ID);
+    const appCertificate = process.env.AGORA_APP_CERTIFICATE || DEFAULT_AGORA_APP_CERTIFICATE;
+    const appId = process.env.AGORA_APP_ID || DEFAULT_AGORA_APP_ID;
     const liveConfigured = /^[a-f0-9]{32}$/i.test(appId);
     res.json({
       status: 'ok',
@@ -481,7 +483,7 @@ app.get('/api/health', (_req, res) => {
       services: {
         emailConfigured: Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL),
         liveConfigured,
-        liveTokenMode: liveConfigured ? (process.env.AGORA_APP_CERTIFICATE ? 'token' : 'tokenless') : 'unconfigured',
+        liveTokenMode: liveConfigured ? (appCertificate ? 'token' : 'tokenless') : 'unconfigured',
         persistentStorageConfigured: Boolean(process.env.AUTH_DB_PATH || RAILWAY_VOLUME_DIR)
       }
     });
@@ -2704,8 +2706,8 @@ app.get('/api/live/rooms/:id', (req, res) => {
 });
 
 app.post('/api/live/rooms/:id/token', liveTokenLimiter, (req, res) => {
-  const appCertificate = process.env.AGORA_APP_CERTIFICATE;
-  const appId = process.env.AGORA_APP_ID || (appCertificate ? '' : DEFAULT_AGORA_APP_ID);
+  const appCertificate = process.env.AGORA_APP_CERTIFICATE || DEFAULT_AGORA_APP_CERTIFICATE;
+  const appId = process.env.AGORA_APP_ID || DEFAULT_AGORA_APP_ID;
   if (!/^[a-f0-9]{32}$/i.test(appId) ||
       (appCertificate && !/^(?:[a-f0-9]{32}|[a-f0-9]{64})$/i.test(appCertificate))) {
     return fail(res, 503, 'LIVE_NOT_CONFIGURED', 'Live streaming credentials are invalid. Please contact support.');
