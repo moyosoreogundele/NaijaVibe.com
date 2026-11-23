@@ -458,28 +458,42 @@ NV.pages.live = async function () {
       await agoraClient.join(tokenData.appId, tokenData.channelName, tokenData.token || null, tokenData.uid);
 
       if (host) {
-        let audioTrack;
-        try {
-          audioTrack = await window.AgoraRTC.createMicrophoneAudioTrack();
-        } catch (audioErr) {
-          if (audioErr.name === 'NotAllowedError' || audioErr.code === 'PERMISSION_DENIED') {
-            throw new Error('Microphone permission denied. Allow mic access in your browser settings to go live.');
+        // Seamlessly transfer pre-broadcast preview tracks to broadcast stage without closing them
+        let audioTrack = previewTracks?.find(track => track.trackMediaType === 'audio');
+        let videoTrack = previewTracks?.find(track => track.trackMediaType === 'video');
+        previewTracks = null; // Transfer ownership so preview cleanup does not close active broadcast tracks
+
+        if (!audioTrack) {
+          try {
+            audioTrack = await window.AgoraRTC.createMicrophoneAudioTrack();
+          } catch (audioErr) {
+            if (audioErr.name === 'NotAllowedError' || audioErr.code === 'PERMISSION_DENIED') {
+              throw new Error('Microphone permission denied. Allow mic access in your browser settings to go live.');
+            }
+            throw new Error('Microphone access failed: ' + (audioErr.message || 'Check audio input device.'));
           }
-          throw new Error('Microphone access failed: ' + (audioErr.message || 'Check audio input device.'));
         }
         localAgoraTracks = [audioTrack];
+
         if (stream.room_type !== 'audio') {
-          try {
-            const videoTrack = await window.AgoraRTC.createCameraVideoTrack();
-            localAgoraTracks.push(videoTrack);
-          } catch (videoErr) {
-            console.warn('Camera initialization failed:', videoErr);
-            if (videoErr.name === 'NotAllowedError' || videoErr.code === 'PERMISSION_DENIED') {
-              throw new Error('Camera permission denied. Allow camera access in your browser settings to broadcast video.');
+          if (!videoTrack) {
+            try {
+              videoTrack = await window.AgoraRTC.createCameraVideoTrack();
+            } catch (videoErr) {
+              console.warn('Camera initialization failed:', videoErr);
+              if (videoErr.name === 'NotAllowedError' || videoErr.code === 'PERMISSION_DENIED') {
+                throw new Error('Camera permission denied. Allow camera access in your browser settings to broadcast video.');
+              }
+              throw new Error('Camera access failed: ' + (videoErr.message || 'Check camera device.'));
             }
-            throw new Error('Camera access failed: ' + (videoErr.message || 'Check camera device.'));
           }
+          if (videoTrack) {
+            localAgoraTracks.push(videoTrack);
+          }
+        } else if (videoTrack) {
+          videoTrack.close();
         }
+
         await agoraClient.publish(localAgoraTracks);
         if (stream.room_type === 'audio') {
           renderAudioStage(stream, true);
@@ -518,6 +532,7 @@ NV.pages.live = async function () {
         errorMsg = 'Agora Live connection failed. Please ensure AGORA_APP_ID and AGORA_APP_CERTIFICATE are set in your Railway environment variables.';
       }
       showNotice(errorMsg);
+      NV.toast(errorMsg, 'error');
       await loadStreams();
       return;
     }
@@ -845,7 +860,6 @@ NV.pages.live = async function () {
 
   startForm.addEventListener('submit', async event => {
     event.preventDefault();
-    stopPreLivePreview();
 
     const title = NV.$('#live-title').value.trim();
     const topic = NV.$('#live-topic').value;
@@ -877,6 +891,7 @@ NV.pages.live = async function () {
       await joinRoom(data.room, true);
       await loadStreams();
     } catch (err) {
+      stopPreLivePreview();
       NV.toast(err.message || 'Could not start live stream.', 'error');
     } finally {
       if (submitBtn) submitBtn.disabled = false;
